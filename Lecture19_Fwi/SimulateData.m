@@ -59,5 +59,5 @@ for rx_elmt_idx = 1:numel(theta)
 end
 
 % Save Problem Data
-save('RecordedData.mat', '-v7.3', 'x', 'y', 'C', ...
+save('RecordedData1.mat', 'x', 'y', 'C', ...
     'x_circ', 'y_circ', 'f', 'REC_DATA');
