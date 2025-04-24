@@ -10,7 +10,7 @@ dxi = 0.15e-3; xmax = 120e-3;
 xi = -xmax:dxi:xmax; zi = xi;
 Nxi = numel(xi); Nzi = numel(zi);
 [Xi, Zi] = meshgrid(xi, zi);
-option = 2; % 1 for Breast CT; 2 for Breast MRI
+option = 1; % 1 for Breast CT; 2 for Breast MRI
 [C, c_bkgnd] = soundSpeedPhantom2D(Xi, Zi, option);
 
 % Attenuation Map
