@@ -54,6 +54,9 @@ x_idx = dsearchn(xi(:), x_circ(:));
 y_idx = dsearchn(yi(:), y_circ(:));
 ind = sub2ind([Nyi, Nxi], y_idx, x_idx);
 
+%% 
+
+
 % Solver Options for Helmholtz Equation
 a0 = 10; % PML Constant
 L_PML = 9.0e-3; % Thickness of PML  
@@ -66,6 +69,8 @@ for tx_elmt_idx = 1:numel(tx_include)
     y_idx_src = y_idx(tx_include(tx_elmt_idx)); 
     SRC(y_idx_src, x_idx_src, tx_elmt_idx) = 1; 
 end
+%% 
+
 
 % (Nonlinear) Conjugate Gradient
 search_dir = zeros(Nyi,Nxi); % Conjugate Gradient Direction

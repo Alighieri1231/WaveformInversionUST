@@ -44,6 +44,7 @@ lin_idx = @(x_idx, y_idx) y_idx+Ny*(x_idx-1); val_idx = 1;
 % Optimal Stencil Parameters
 [b, d, e] = stencilOptParams(min(vel(:)),max(vel(:)),f,h,g);
 
+
 % Structures to Form Sparse Matrices
 rows = zeros(9*(Nx-2)*(Ny-2)+(Nx*Ny-(Nx-2)*(Ny-2)),1);
 cols = zeros(9*(Nx-2)*(Ny-2)+(Nx*Ny-(Nx-2)*(Ny-2)),1);
@@ -123,6 +124,12 @@ for x_idx = 1:Nx
         end
     end
 end
+
+disp(size(rows))
+disp(size(cols))
+disp(size(vals))
+disp(Nx)
+disp(Ny)
 
 % Generate Left-Hand Side of Sparse Array
 HelmholtzEqn = sparse(rows, cols, vals, Nx*Ny, Nx*Ny);
