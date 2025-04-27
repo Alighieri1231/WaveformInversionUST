@@ -45,131 +45,38 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     B = (ex / ey)[1::2, ::2]
     C = (ex * ey)[::2, ::2]
 
-    def lin_idx(x_idx, y_idx):
-        return y_idx + Ny * x_idx
-
     b, d, e = stencil_opt_params(jnp.min(vel), jnp.max(vel), f, h, g)
-    rows = []
-    cols = []
-    vals = []
-
-    for x in range(Nx):
-        for y in range(Ny):
-            idx = lin_idx(x, y)
-
-            # --- Dirichlet boundary: M[idx,idx] = 1
-            if x == 0 or x == Nx - 1 or y == 0 or y == Ny - 1:
-                rows.append(idx)
-                cols.append(idx)
-                vals.append(1.0)
-                continue
-
-            # --- interior: 9‐point stencil
-            # center
-            A_c = A[y, x]
-            A_l = A[y, x - 1]
-            B_c = B[y, x]
-            B_l = B[y - 1, x]
-            C_c = C[y, x]
-            k_c = k[y, x]
-
-            val_center = (1 - d - e) * C_c * (k_c**2) - b * (
-                A_c + A_l + B_c / (g**2) + B_l / (g**2)
-            ) / (h**2)
-            rows.append(idx)
-            cols.append(idx)
-            vals.append(val_center)
-
-            # left
-            idx_l = lin_idx(x - 1, y)
-            val_l = (
-                b * A_l
-                - ((1 - b) / 2) * (B[y, x - 1] / (g**2) + B[y - 1, x - 1] / (g**2))
-            ) / (h**2) + (d / 4) * C[y, x - 1] * (k[y, x - 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_l)
-            vals.append(val_l)
-
-            # right
-            idx_r = lin_idx(x + 1, y)
-            val_r = (
-                b * A_c
-                - ((1 - b) / 2) * (B[y, x + 1] / (g**2) + B[y - 1, x + 1] / (g**2))
-            ) / (h**2) + (d / 4) * C[y, x + 1] * (k[y, x + 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_r)
-            vals.append(val_r)
-
-            # down
-            idx_d = lin_idx(x, y - 1)
-            val_d = (
-                b * B[y - 1, x] / (g**2)
-                - ((1 - b) / 2) * (A[y - 1, x] + A[y - 1, x - 1])
-            ) / (h**2) + (d / 4) * C[y - 1, x] * (k[y - 1, x] ** 2)
-            rows.append(idx)
-            cols.append(idx_d)
-            vals.append(val_d)
-
-            # up
-            idx_u = lin_idx(x, y + 1)
-            val_u = (
-                b * B_c / (g**2) - ((1 - b) / 2) * (A[y + 1, x] + A[y + 1, x - 1])
-            ) / (h**2) + (d / 4) * C[y + 1, x] * (k[y + 1, x] ** 2)
-            rows.append(idx)
-            cols.append(idx_u)
-            vals.append(val_u)
-
-            # down-left
-            idx_bl = lin_idx(x - 1, y - 1)
-            val_bl = ((1 - b) / 2) * (A[y - 1, x - 1] + B[y - 1, x - 1] / (g**2)) / (
-                h**2
-            ) + (e / 4) * C[y - 1, x - 1] * (k[y - 1, x - 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_bl)
-            vals.append(val_bl)
-
-            # down-right
-            idx_br = lin_idx(x + 1, y - 1)
-            val_br = ((1 - b) / 2) * (A[y - 1, x] + B[y - 1, x + 1] / (g**2)) / (
-                h**2
-            ) + (e / 4) * C[y - 1, x + 1] * (k[y - 1, x + 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_br)
-            vals.append(val_br)
-
-            # up-left
-            idx_ul = lin_idx(x - 1, y + 1)
-            val_ul = ((1 - b) / 2) * (A[y + 1, x - 1] + B[y, x - 1] / (g**2)) / (
-                h**2
-            ) + (e / 4) * C[y + 1, x - 1] * (k[y + 1, x - 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_ul)
-            vals.append(val_ul)
-
-            # up-right
-            idx_ur = lin_idx(x + 1, y + 1)
-            val_ur = ((1 - b) / 2) * (A[y + 1, x] + B[y, x + 1] / (g**2)) / (h**2) + (
-                e / 4
-            ) * C[y + 1, x + 1] * (k[y + 1, x + 1] ** 2)
-            rows.append(idx)
-            cols.append(idx_ur)
-            vals.append(val_ur)
-
-    # turn into JAX arrays
-    rows = jnp.array(rows, dtype=jnp.int32)
-    cols = jnp.array(cols, dtype=jnp.int32)
-    vals = jnp.array(vals)
-    print("rows, cols, vals", len(rows), len(cols), len(vals))
-    print(Nx, Ny)
-    # build a sparse COO:
-    H = jsparse.BCOO((vals, jnp.stack([rows, cols], axis=0)), shape=(Nx * Ny, Nx * Ny))
+    # for version
+    # H = for_hemholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
+    # vectorized version
+    H = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
 
     # H = jsparse.BCOO(
     #     (jnp.array(vals), jnp.stack([jnp.array(rows), jnp.array(cols)])),
     #     shape=(Nx * Ny, Nx * Ny),
     # )
-    rhs = src.reshape(Nx * Ny)
-    sol = spsolve(H.T.conj() if adjoint else H, rhs)
+    # reshape src to Nx*Ny and -1 to get the right shape
+    rhs = jnp.reshape(src, (Nx * Ny, -1))
+    # Change type to complex64
+    rhs = jnp.array(rhs, dtype=jnp.complex64)
+
+    # rhs = src.reshape(Nx * Ny)
+    # sol = spsolve(H.T.conj() if adjoint else H, rhs)
+
+    # data = H_bcoo.data
+    # row, col = H_bcoo.indices[:, 0], H_bcoo.indices[:, 1]
+    # counts = jnp.bincount(row, length=H_bcoo.shape[0])
+    # indptr = jnp.cumsum(jnp.concatenate([jnp.array([0]), counts]))
+
+    data = H.data
+    indices = H.indices
+    indptr = H.indptr
+
+    # sol = spsolve(data, indices, indptr, rhs)
+    sol = jnp.stack(
+        [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
+    )
+
     return sol.reshape(Ny, Nx)
 
 
@@ -226,12 +133,7 @@ def stencil_opt_params(vmin, vmax, f, h, g):
     return b, d, e
 
 
-import jax
-import jax.numpy as jnp
-from jax.experimental import sparse
-
-
-@jax.jit
+# @jax.jit
 def assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
     """
     Fully-vectorized assembly of a sparse Helmholtz matrix using a 9-point stencil
@@ -356,12 +258,140 @@ def assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
     rows = jnp.concatenate([rows_int, rows_bdr], axis=0)
     cols = jnp.concatenate([cols_int, cols_bdr], axis=0)
     vals = jnp.concatenate([vals_int, vals_bdr], axis=0)
+    print("rows, cols, vals", len(rows), len(cols), len(vals))
+    print(Nx, Ny)
+    gaa = jnp.stack([rows, cols], axis=1)
+    print("stack shape", gaa.shape)
 
     # 8) Assemble sparse COO
-    return sparse.BCOO(
-        (vals, jnp.stack([rows, cols], axis=0)), shape=(Nx * Ny, Nx * Ny)
-    )
+    H = jsparse.BCOO((vals, jnp.stack([rows, cols], axis=1)), shape=(Nx * Ny, Nx * Ny))
+    H = jsparse.BCSR.from_bcoo(H)
+
+    return H
 
 
 # Example usage:
 # mat = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
+
+
+def for_hemholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
+    def lin_idx(x_idx, y_idx):
+        return y_idx + Ny * x_idx
+
+    rows = []
+    cols = []
+    vals = []
+
+    for x in range(Nx):
+        for y in range(Ny):
+            idx = lin_idx(x, y)
+
+            # --- Dirichlet boundary: M[idx,idx] = 1
+            if x == 0 or x == Nx - 1 or y == 0 or y == Ny - 1:
+                rows.append(idx)
+                cols.append(idx)
+                vals.append(1.0)
+                continue
+
+            # --- interior: 9‐point stencil
+            # center
+            A_c = A[y, x]
+            A_l = A[y, x - 1]
+            B_c = B[y, x]
+            B_l = B[y - 1, x]
+            C_c = C[y, x]
+            k_c = k[y, x]
+
+            val_center = (1 - d - e) * C_c * (k_c**2) - b * (
+                A_c + A_l + B_c / (g**2) + B_l / (g**2)
+            ) / (h**2)
+            rows.append(idx)
+            cols.append(idx)
+            vals.append(val_center)
+
+            # left
+            idx_l = lin_idx(x - 1, y)
+            val_l = (
+                b * A_l
+                - ((1 - b) / 2) * (B[y, x - 1] / (g**2) + B[y - 1, x - 1] / (g**2))
+            ) / (h**2) + (d / 4) * C[y, x - 1] * (k[y, x - 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_l)
+            vals.append(val_l)
+
+            # right
+            idx_r = lin_idx(x + 1, y)
+            val_r = (
+                b * A_c
+                - ((1 - b) / 2) * (B[y, x + 1] / (g**2) + B[y - 1, x + 1] / (g**2))
+            ) / (h**2) + (d / 4) * C[y, x + 1] * (k[y, x + 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_r)
+            vals.append(val_r)
+
+            # down
+            idx_d = lin_idx(x, y - 1)
+            val_d = (
+                b * B[y - 1, x] / (g**2)
+                - ((1 - b) / 2) * (A[y - 1, x] + A[y - 1, x - 1])
+            ) / (h**2) + (d / 4) * C[y - 1, x] * (k[y - 1, x] ** 2)
+            rows.append(idx)
+            cols.append(idx_d)
+            vals.append(val_d)
+
+            # up
+            idx_u = lin_idx(x, y + 1)
+            val_u = (
+                b * B_c / (g**2) - ((1 - b) / 2) * (A[y + 1, x] + A[y + 1, x - 1])
+            ) / (h**2) + (d / 4) * C[y + 1, x] * (k[y + 1, x] ** 2)
+            rows.append(idx)
+            cols.append(idx_u)
+            vals.append(val_u)
+
+            # down-left
+            idx_bl = lin_idx(x - 1, y - 1)
+            val_bl = ((1 - b) / 2) * (A[y - 1, x - 1] + B[y - 1, x - 1] / (g**2)) / (
+                h**2
+            ) + (e / 4) * C[y - 1, x - 1] * (k[y - 1, x - 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_bl)
+            vals.append(val_bl)
+
+            # down-right
+            idx_br = lin_idx(x + 1, y - 1)
+            val_br = ((1 - b) / 2) * (A[y - 1, x] + B[y - 1, x + 1] / (g**2)) / (
+                h**2
+            ) + (e / 4) * C[y - 1, x + 1] * (k[y - 1, x + 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_br)
+            vals.append(val_br)
+
+            # up-left
+            idx_ul = lin_idx(x - 1, y + 1)
+            val_ul = ((1 - b) / 2) * (A[y + 1, x - 1] + B[y, x - 1] / (g**2)) / (
+                h**2
+            ) + (e / 4) * C[y + 1, x - 1] * (k[y + 1, x - 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_ul)
+            vals.append(val_ul)
+
+            # up-right
+            idx_ur = lin_idx(x + 1, y + 1)
+            val_ur = ((1 - b) / 2) * (A[y + 1, x] + B[y, x + 1] / (g**2)) / (h**2) + (
+                e / 4
+            ) * C[y + 1, x + 1] * (k[y + 1, x + 1] ** 2)
+            rows.append(idx)
+            cols.append(idx_ur)
+            vals.append(val_ur)
+
+    # turn into JAX arrays
+    rows = jnp.array(rows, dtype=jnp.int32)
+    cols = jnp.array(cols, dtype=jnp.int32)
+    vals = jnp.array(vals)
+    print("rows, cols, vals", len(rows), len(cols), len(vals))
+    print(Nx, Ny)
+
+    # build a sparse COO:
+    H = jsparse.BCOO((vals, jnp.stack([rows, cols], axis=0)), shape=(Nx * Ny, Nx * Ny))
+
+    return H
