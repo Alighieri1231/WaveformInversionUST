@@ -73,6 +73,8 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     indptr = H.indptr
 
     # sol = spsolve(data, indices, indptr, rhs)
+
+    # error here, please check
     sol = jnp.stack(
         [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
     )
