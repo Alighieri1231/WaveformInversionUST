@@ -58,7 +58,7 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     # reshape src to Nx*Ny and -1 to get the right shape
     rhs = jnp.reshape(src, (Nx * Ny, -1))
     # Change type to complex64
-    # rhs = jnp.array(rhs, dtype=jnp.complex64)
+    rhs = jnp.array(rhs, dtype=jnp.complex64)
 
     # rhs = src.reshape(Nx * Ny)
     # sol = spsolve(H.T.conj() if adjoint else H, rhs)
@@ -261,7 +261,7 @@ def assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
     cols = jnp.concatenate([cols_int, cols_bdr], axis=0)
     vals = jnp.concatenate([vals_int, vals_bdr], axis=0)
     # change vals type to float32
-    vals = jnp.array(vals, dtype=jnp.float32)
+    # vals = jnp.array(vals, dtype=jnp.float32)
     # check type
     # print("rows cols vals", rows.dtype, cols.dtype, vals.dtype)
 

@@ -26,7 +26,8 @@ def fwi_loss_function(
     VEL_ESTIM = 1.0 / slow
     # (1A) Forward wavefield
     WVFIELD = solve_helmholtz(xi, yi, VEL_ESTIM, SRC, f, a0, L_PML, adjoint=False)
-
+    print("WVFIELD shape:", WVFIELD.shape)
+    print("WVFIELD:type", WVFIELD.dtype)
     # (1B) Estimate sources (per tx)
     REC_SIM = jnp.zeros((tx_include.size, numElements))
     SRC_ESTIM = jnp.zeros(tx_include.size)
@@ -42,4 +43,15 @@ def fwi_loss_function(
 
     # (2) Data fidelity loss
     loss = 0.5 * jnp.sum((REC_SIM - REC_DATA) ** 2)
+    print("Loss dtype: ", loss.shape)
+    print("Loss shape: ", loss.shape)
+
+    print("REC_SIM shape:", REC_SIM.shape)
+    print("REC_SIM dtype:", REC_SIM.dtype)
+
+    print("REC_DATA shape:", REC_DATA.shape)
+    print("REC_DATA dtype:", REC_DATA.dtype)
+    print("SRC_ESTIM shape:", SRC_ESTIM.shape)
+    print("SRC_ESTIM dtype:", SRC_ESTIM.dtype)
+
     return loss
