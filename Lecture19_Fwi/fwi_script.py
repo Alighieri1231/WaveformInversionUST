@@ -62,8 +62,6 @@ def main():
     for i, t in enumerate(tx_include):
         SRC = SRC.at[y_idx[t], x_idx[t], i].set(1.0)
 
-    print(f"SRC shape: {SRC.shape}, dtype: {SRC.dtype}")
-
     # -------------------------
     # 3) Build explicit_indices
     # -------------------------
@@ -74,22 +72,11 @@ def main():
         explicit_indices.append(mask)
         mask_indices.append(mask)
 
-    # debug print first 5
-    for i, idx in enumerate(mask_indices[:5]):
-        print(f"tx={i}: #included = {len(idx)}")
-
-    # check row‐ vs col‐major
-    for k in range(5):
-        yi_k, xi_k = int(y_idx[k]), int(x_idx[k])
-        row_ind = yi_k * Nxi + xi_k
-        col_ind = xi_k * Nyi + yi_k
-        print(f"k={k}: (y,x)=({yi_k},{xi_k}), row={row_ind}, col={col_ind}")
-
     # -------------------------
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 2  # prueba rápida
+    Niter = 8  # prueba rápida
 
     print("Running Nonlinear Conjugate Gradient...")
     VEL_F, SD_F, GRAD_F = nonlinear_conjugate_gradient(

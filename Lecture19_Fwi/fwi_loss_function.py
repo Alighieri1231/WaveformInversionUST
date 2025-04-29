@@ -42,7 +42,8 @@ def fwi_loss_function(
         REC_SIM = REC_SIM.at[i, rcv_idx].set(src_scale * rec_sim)
 
     # (2) Data fidelity loss
-    loss = 0.5 * jnp.sum((REC_SIM - REC_DATA) ** 2)
+    ###make abs value of this complex.
+    loss = 0.5 * jnp.sum((abs(REC_SIM - REC_DATA)) ** 2)
     print("Loss dtype: ", loss.shape)
     print("Loss shape: ", loss.shape)
 

@@ -70,21 +70,7 @@ for tx_elmt_idx = 1:numel(tx_include)
     y_idx_src = y_idx(tx_include(tx_elmt_idx)); 
     SRC(y_idx_src, x_idx_src, tx_elmt_idx) = 1; 
 end
-% Para los tx seleccionados, cuenta por fila:
-counts = sum(elemInclude(tx_include,:), 2);
 
-% El número que debería dar es:
-expected = numElements - (2*numElemLeftRightExcl + 1);
-
-% Muestra los primeros 5 transmisores como prueba
-fprintf('Primeros 5 transmisores:\n');
-for k = 1:5
-    fprintf(' tx=%3d  #included=%3d\n', tx_include(k), counts(k));
-end
-
-% Compruébalo con un assert:
-assert(all(counts == expected), ...
-       'Error: alguna fila de elemInclude tiene el número equivocado de receptores')
 
 %% 
 
@@ -128,6 +114,7 @@ for iter = 1:Niter
     ADJ_WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, ADJ_SRC, f, a0, L_PML, true);
     BACKPROJ = -real(conj(VIRT_SRC).*ADJ_WVFIELD);
     gradient_img = sum(BACKPROJ,3);
+    disp(['grad ' +num2str(norm(gradient_img))])
     % Step 2: Compute New Conjugate Gradient Search Direction from Gradient
     % (2A) Conjugate Gradient Momentum Calculation
     if (iter == 1) || (momentumFormula == 0)
@@ -172,6 +159,8 @@ for iter = 1:Niter
         case 1 % Not Involving Gradient Nor Search Direction
             stepSize = real(dREC_SIM(:)'*(REC_DATA(:)-REC_SIM(:))) / ...
                 (dREC_SIM(:)'*dREC_SIM(:)); 
+            disp(real(dREC_SIM(:)'*(REC_DATA(:)-REC_SIM(:))))
+            disp((dREC_SIM(:)'*dREC_SIM(:)))
             % REVIEW STEP SIZE CALC TO EXPLAIN WHY REAL() IS USED HERE
         case 2 % Involving Gradient BUT NOT Search Direction
             stepSize = (gradient_img(:)'*gradient_img(:)) / ...
@@ -181,6 +170,7 @@ for iter = 1:Niter
                 (dREC_SIM(:)'*dREC_SIM(:));
         
     end
+    disp(num2str(stepSize))
     SLOW_ESTIM = SLOW_ESTIM + stepSize * search_dir;
     VEL_ESTIM = 1./real(SLOW_ESTIM); % Wave Velocity Estimate [m/s]
     % Visualize Reconstructed Solution

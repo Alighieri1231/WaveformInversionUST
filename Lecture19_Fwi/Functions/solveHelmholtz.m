@@ -125,14 +125,6 @@ for x_idx = 1:Nx
     end
 end
 
-disp(size(rows))
-disp(size(cols))
-disp(size(vals))
-disp(class(vals))
-disp(Nx)
-disp(Ny)
-disp(size(src))
-disp(numel(src)/(Nx*Ny))
 % Generate Left-Hand Side of Sparse Array
 HelmholtzEqn = sparse(rows, cols, vals, Nx*Ny, Nx*Ny);
 disp(class(HelmholtzEqn))

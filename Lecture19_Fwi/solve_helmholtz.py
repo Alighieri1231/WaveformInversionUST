@@ -49,32 +49,26 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     # for version
     # H = for_hemholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
     # vectorized version
-    H = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
+    H_bcoo = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
+    # 1) Elige la matriz correcta: H o H^*
+    if adjoint:
+        H_t = H_bcoo.transpose()  # sigue siendo BCOO
+        H_use = jsparse.BCOO((jnp.conj(H_t.data), H_t.indices), shape=H_t.shape)
+    else:
+        H_use = H_bcoo
 
-    # H = jsparse.BCOO(
-    #     (jnp.array(vals), jnp.stack([jnp.array(rows), jnp.array(cols)])),
-    #     shape=(Nx * Ny, Nx * Ny),
-    # )
+    # 2) Ahora convertimos UNA SOLA VEZ ese BCOO (ya transpuesto/conjugado si tocaba)
+    H_use = jsparse.BCSR.from_bcoo(H_use)
+
     # reshape src to Nx*Ny and -1 to get the right shape
     rhs = jnp.reshape(src, (Nx * Ny, -1))
     # Change type to complex64
     rhs = jnp.array(rhs, dtype=jnp.complex64)
 
-    # rhs = src.reshape(Nx * Ny)
-    # sol = spsolve(H.T.conj() if adjoint else H, rhs)
-
-    # data = H_bcoo.data
-    # row, col = H_bcoo.indices[:, 0], H_bcoo.indices[:, 1]
-    # counts = jnp.bincount(row, length=H_bcoo.shape[0])
-    # indptr = jnp.cumsum(jnp.concatenate([jnp.array([0]), counts]))
-
-    data = H.data
-    indices = H.indices
-    indptr = H.indptr
+    data, indices, indptr = H_use.data, H_use.indices, H_use.indptr
 
     # sol = spsolve(data, indices, indptr, rhs)
 
-    # error here, please check
     sol = jnp.stack(
         [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
     )
@@ -267,10 +261,6 @@ def assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
 
     # 8) Assemble sparse COO
     H = jsparse.BCOO((vals, jnp.stack([rows, cols], axis=1)), shape=(Nx * Ny, Nx * Ny))
-    H = jsparse.BCSR.from_bcoo(H)
-
-    # check type
-    # print("H", H.data.dtype, H.indices.dtype, H.indptr.dtype)
 
     return H
 
