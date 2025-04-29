@@ -1,163 +1,120 @@
 import jax
 import jax.numpy as jnp
 from functools import partial
-from solve_helmholtz import solve_helmholtz  # Assuming this is the correct import
+from scipy.io import loadmat
+from scipy.spatial import cKDTree
+import matplotlib.pyplot as plt
+import numpy as np
+from solve_helmholtz import solve_helmholtz
 
-# Assume solveHelmholtz is already defined and JAX-compatible
-# solveHelmholtz(xi, yi, VEL_ESTIM, SRC, f, a0, L_PML, adjoint)
 
-
-# @partial(jax.jit, static_argnums=(8, 9))
-# jit full no partial
-# @jax.jit
-@partial(jax.jit, static_argnums=(2, 8, 9, 10, 11))
+# -----------------------------------------------------------------------------
+# 1) Nonlinear Conjugate Gradient (FWI) with correct Fortran‐ordering indexing
+# -----------------------------------------------------------------------------
+# @partial(jax.jit, static_argnums=(2, 8, 9, 10, 11))
 def nonlinear_conjugate_gradient(
-    xi,  # 0
-    yi,  # 1
-    numElements,  # 2
-    REC_DATA,  # 3
-    SRC,  # 4
-    elemInclude,  # 5
-    tx_include,  # 6
-    ind,  # 7
-    c_init,  # 8 -> STATIC!
-    f,  # 9 -> STATIC!
-    Niter,  # 10 -> STATIC! [important for jnp.arange()]
-    a0,  # 11
-    L_PML,  # 12
-    explicit_indices,  # 13
-    mask_indices,  # 14
+    xi,
+    yi,
+    numElements,
+    REC_DATA,
+    SRC,
+    elemInclude,
+    tx_include,
+    ind_matlab,  # precomputed x_idx*Nyi + y_idx
+    c_init,
+    f,
+    Niter,
+    a0,
+    L_PML,
+    explicit_indices,
+    mask_indices,
 ):
     Nyi, Nxi = yi.size, xi.size
 
-    search_dir = jnp.zeros((Nyi, Nxi))
-    gradient_img_prev = jnp.zeros((Nyi, Nxi))
-    VEL_ESTIM = c_init * jnp.ones((Nyi, Nxi))
-    SLOW_ESTIM = 1.0 / VEL_ESTIM
+    # Initialize state
+    VEL = c_init * jnp.ones((Nyi, Nxi))
+    SLOW = 1.0 / VEL
+    sd = jnp.zeros((Nyi, Nxi))
+    gprev = jnp.zeros((Nyi, Nxi))
 
-    def body_fun(state, iter_idx):
-        VEL_ESTIM, SLOW_ESTIM, search_dir, gradient_img_prev = state
-        print("Iteration:", iter_idx)
+    def body_fun(state, it):
+        VEL, SLOW, sd, gprev = state
 
-        # Step 1a: Gradient Calculation )
-        WVFIELD = solve_helmholtz(xi, yi, VEL_ESTIM, SRC, f, a0, L_PML, False)
+        # 1a) forward Helmholtz
+        WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-        # Step 1b: Estimate forward sources and adjust simulated fields
-        SRC_ESTIM = jnp.zeros((len(tx_include),))
-        for tx_elmt_idx in range(len(tx_include)):
-            # logic 2
-            WVFIELD_elmt = WVFIELD[:, :, tx_elmt_idx]
-            REC_SIM = jnp.take(WVFIELD_elmt.reshape(-1), explicit_indices[tx_elmt_idx])
-            REC = jnp.take(REC_DATA[tx_elmt_idx, :], mask_indices[tx_elmt_idx])
-
-            # original from matlab
-            # WVFIELD_elmt = WVFIELD[:, :, tx_elmt_idx]
-            # REC_SIM = WVFIELD_elmt[ind(elemInclude[tx_include[tx_elmt_idx], :])]
-            # REC = REC_DATA[tx_elmt_idx, elemInclude[tx_include[tx_elmt_idx], :]]
-            SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set(
-                jnp.vdot(REC_SIM, REC) / jnp.vdot(REC_SIM, REC_SIM)
+        # 1b) estimate source strengths
+        SRC_EST = jnp.zeros((len(tx_include),), dtype=jnp.complex64)
+        for t in range(len(tx_include)):
+            W = WV[:, :, t]
+            flat = W.flatten(order="F")
+            # values at each receiver element
+            vals = flat[ind_matlab]
+            meas = REC_DATA[t, :]
+            SRC_EST = SRC_EST.at[t].set(
+                jnp.vdot(vals, meas) / (jnp.vdot(vals, vals) + 1e-12)
             )
+        WV = WV * SRC_EST[jnp.newaxis, jnp.newaxis, :]
 
-        WVFIELD = WVFIELD * SRC_ESTIM.reshape(1, 1, -1)
+        # 1c) build adjoint sources
+        ADJ = jnp.zeros((Nyi * Nxi, len(tx_include)), dtype=jnp.complex64)
+        REC_SIM = jnp.zeros((len(tx_include), numElements), dtype=jnp.complex64)
+        for t in range(len(tx_include)):
+            W = WV[:, :, t]
+            flat = W.flatten(order="F")
+            # simulated rec at included receivers
+            grid_inds = ind_matlab[mask_indices[t]]
+            sim_vals = flat[grid_inds]
+            REC_SIM = REC_SIM.at[t, mask_indices[t]].set(sim_vals)
+            diff = sim_vals - REC_DATA[t, mask_indices[t]]
+            ADJ = ADJ.at[grid_inds, t].set(diff)
+        ADJ_SRC = ADJ.reshape((Nyi, Nxi, len(tx_include)))
 
-        # Step 1c: Build adjoint sources based on errors
-        ADJ_SRC = jnp.zeros((Nyi, Nxi, len(tx_include)))
-        REC_SIM = jnp.zeros((len(tx_include), numElements))
+        # 1d) virtual source
+        VIRT = (2 * (2 * jnp.pi * f) ** 2) * SLOW[:, :, None] * WV
 
-        for tx_elmt_idx in range(len(tx_include)):
-            WVFIELD_elmt = WVFIELD[:, :, tx_elmt_idx]
+        # 1e) backpropagate
+        ADJ_WV = solve_helmholtz(xi, yi, VEL, ADJ_SRC, f, a0, L_PML, True)
+        BACK = -jnp.real(jnp.conj(VIRT) * ADJ_WV)
+        grad = jnp.sum(BACK, axis=2)
+        jax.debug.print("iter={i} ||grad||={n:.3e}", i=it, n=jnp.linalg.norm(grad))
 
-            # original
-            # REC_SIM = REC_SIM.at[
-            #     tx_elmt_idx, elemInclude[tx_include[tx_elmt_idx], :]
-            # ].set(WVFIELD_elmt[ind(elemInclude[tx_include[tx_elmt_idx], :])])
-            # diff = (
-            #     REC_SIM[tx_elmt_idx, elemInclude[tx_include[tx_elmt_idx], :]]
-            #     - REC_DATA[tx_elmt_idx, elemInclude[tx_include[tx_elmt_idx], :]]
-            # )
+        # 2) Conjugate‐gradient update (Hestenes‐Stiefel)
+        dg = grad - gprev
+        beta = jnp.vdot(grad.ravel(), dg.ravel()) / (
+            jnp.vdot(sd.ravel(), dg.ravel()) + 1e-12
+        )
+        sd_new = beta * sd - grad
 
-            # adj_src_update = (
-            #     jnp.zeros((Nyi, Nxi))
-            #     .at[ind(elemInclude[tx_include[tx_elmt_idx], :])]
-            #     .set(diff)
-            # )
-
-            # changed
-            REC_SIM = REC_SIM.at[tx_elmt_idx, explicit_indices[tx_elmt_idx]].set(
-                jnp.take(WVFIELD_elmt.reshape(-1), explicit_indices[tx_elmt_idx])
-            )
-
-            diff = REC_SIM[tx_elmt_idx, explicit_indices[tx_elmt_idx]] - jnp.take(
-                REC_DATA[tx_elmt_idx, :], mask_indices[tx_elmt_idx]
-            )
-
-            adj_src_update = (
-                jnp.zeros((Nyi * Nxi,)).at[explicit_indices[tx_elmt_idx]].set(diff)
-            )
-            adj_src_update = adj_src_update.reshape((Nyi, Nxi))
-
-            ADJ_SRC = ADJ_SRC.at[:, :, tx_elmt_idx].set(adj_src_update)
-
-        # Step 1d: Calculate virtual sources
-        # VIRT_SRC = (2 * (2 * jnp.pi * f) ** 2) * SLOW_ESTIM * WVFIELD
-        VIRT_SRC = (2 * (2 * jnp.pi * f) ** 2) * SLOW_ESTIM[:, :, None] * WVFIELD
-
-        # Step 1e: Backproject errors to get gradient
-        ADJ_WVFIELD = solve_helmholtz(xi, yi, VEL_ESTIM, ADJ_SRC, f, a0, L_PML, True)
-        BACKPROJ = -jnp.real(jnp.conj(VIRT_SRC) * ADJ_WVFIELD)
-        gradient_img = jnp.sum(BACKPROJ, axis=2)
-
-        # Step 2a: Hestenes-Stiefel Conjugate Gradient Beta
-        diff_grad = gradient_img - gradient_img_prev
-        beta_num = jnp.vdot(gradient_img.ravel(), diff_grad.ravel())
-        beta_den = jnp.vdot(search_dir.ravel(), diff_grad.ravel())
-        beta = beta_num / (beta_den + 1e-10)
-
-        # Step 2b: Update Search Direction
-        search_dir_new = beta * search_dir - gradient_img
-
-        # Step 3: Forward Projection of Search Direction
-        # PERTURBED_WVFIELD = solve_helmholtz(
-        #     xi, yi, VEL_ESTIM, -VIRT_SRC * search_dir_new, f, a0, L_PML, False
-        # )
-        PERTURBED_WVFIELD = solve_helmholtz(
-            xi,
-            yi,
-            VEL_ESTIM,
-            -VIRT_SRC * search_dir_new[:, :, None],
-            f,
-            a0,
-            L_PML,
-            False,
+        # 3) forward project search direction
+        PERT = solve_helmholtz(
+            xi, yi, VEL, -VIRT * sd_new[:, :, None], f, a0, L_PML, False
         )
 
-        dREC_SIM = jnp.zeros((len(tx_include), numElements))
+        # 4) line search
+        dREC = jnp.zeros((len(tx_include), numElements), dtype=jnp.complex64)
+        for t in range(len(tx_include)):
+            Wp = PERT[:, :, t].flatten(order="F")
+            vals = Wp[ind_matlab]
+            dREC = dREC.at[t, :].set(vals)
+        num = jnp.real(jnp.vdot(dREC.ravel(), (REC_DATA - REC_SIM).ravel()))
+        den = jnp.real(jnp.vdot(dREC.ravel(), dREC.ravel()))
+        step = num / (den + 1e-12)
+        jax.debug.print("iter={i} stepSize={s:.3e}", i=it, s=step)
 
-        for tx_elmt_idx in range(len(tx_include)):
-            PERTURBED_WVFIELD_elmt = PERTURBED_WVFIELD[:, :, tx_elmt_idx]
-            # dREC_SIM = dREC_SIM.at[
-            #     tx_elmt_idx, elemInclude[tx_include[tx_elmt_idx], :]
-            # ].set(PERTURBED_WVFIELD_elmt[ind(elemInclude[tx_include[tx_elmt_idx], :])])
-            dREC_SIM = dREC_SIM.at[tx_elmt_idx, explicit_indices[tx_elmt_idx]].set(
-                jnp.take(
-                    PERTURBED_WVFIELD_elmt.reshape(-1), explicit_indices[tx_elmt_idx]
-                )
-            )
+        # 5) update
+        SLOW_new = SLOW + step * sd_new
+        VEL_new = 1.0 / SLOW_new
+        jax.debug.print(
+            "iter={i} Vmin/Vmax={vmin:.3e}/{vmax:.3e}",
+            i=it,
+            vmin=jnp.min(VEL_new),
+            vmax=jnp.max(VEL_new),
+        )
 
-        # Step 5: Line Search
-        # step option 1
-        stepSize = jnp.real(
-            jnp.vdot(dREC_SIM.ravel(), (REC_DATA - REC_SIM).ravel())
-        ) / (jnp.vdot(dREC_SIM.ravel(), dREC_SIM.ravel()) + 1e-10)
+        return (VEL_new, SLOW_new, sd_new, grad), None
 
-        # Step 6: Update Estimates
-        SLOW_ESTIM_new = SLOW_ESTIM + stepSize * search_dir_new
-        VEL_ESTIM_new = 1.0 / jnp.real(SLOW_ESTIM_new)
-
-        return (VEL_ESTIM_new, SLOW_ESTIM_new, search_dir_new, gradient_img), None
-
-    init_state = (VEL_ESTIM, SLOW_ESTIM, search_dir, gradient_img_prev)
-    final_state, _ = jax.lax.scan(body_fun, init_state, jnp.arange(Niter))
-
-    VEL_ESTIM_final, _, search_dir_final, gradient_img_final = final_state
-    return VEL_ESTIM_final, search_dir_final, gradient_img_final
+    (VEL_F, _, sd_F, grad_F), _ = jax.lax.scan(
+        body_fun, (VEL, SLOW, sd, gprev), jnp.arange(Niter)
+    )
+    return VEL_F, sd_F, grad_F

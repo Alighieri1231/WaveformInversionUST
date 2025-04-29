@@ -5,7 +5,7 @@ clc
 addpath(genpath('Functions'));
 
 % Load Problem Data
-load('RecordedData.mat', 'x', 'y', 'C', ...
+load('RecordedData1.mat', 'x', 'y', 'C', ...
     'x_circ', 'y_circ', 'f', 'REC_DATA');
 numElements = numel(x_circ); % Number of Transducer Elements
 assert(numElements == numel(y_circ));
@@ -28,6 +28,7 @@ for tx_element = 1:numElements
         elemLeftRightExclCurrent(elemLeftRightExclCurrent>numElements) - numElements;
     elemInclude(tx_element,elemLeftRightExclCurrent) = false;
 end
+
 
 %% Frequency-Domain Full Waveform Inversion (FWI)
 
@@ -69,6 +70,22 @@ for tx_elmt_idx = 1:numel(tx_include)
     y_idx_src = y_idx(tx_include(tx_elmt_idx)); 
     SRC(y_idx_src, x_idx_src, tx_elmt_idx) = 1; 
 end
+% Para los tx seleccionados, cuenta por fila:
+counts = sum(elemInclude(tx_include,:), 2);
+
+% El número que debería dar es:
+expected = numElements - (2*numElemLeftRightExcl + 1);
+
+% Muestra los primeros 5 transmisores como prueba
+fprintf('Primeros 5 transmisores:\n');
+for k = 1:5
+    fprintf(' tx=%3d  #included=%3d\n', tx_include(k), counts(k));
+end
+
+% Compruébalo con un assert:
+assert(all(counts == expected), ...
+       'Error: alguna fila de elemInclude tiene el número equivocado de receptores')
+
 %% 
 
 
