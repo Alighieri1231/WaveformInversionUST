@@ -7,6 +7,7 @@ from nonlinearcg import nonlinear_conjugate_gradient
 import matplotlib.pyplot as plt
 from HelperFunctions import imagesc
 import numpy as np
+from solve_helmholtz import solve_helmholtz
 
 
 def main():
@@ -77,82 +78,87 @@ def main():
     # -------------------------
     c_init = 1480.0
     Niter = 8  # prueba rápida
+    VEL = c_init * jnp.ones((Nyi, Nxi))
+    print("Initial VEL shape:", VEL.shape)
+    WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-    print("Running Nonlinear Conjugate Gradient...")
-    VEL_F, SD_F, GRAD_F = nonlinear_conjugate_gradient(
-        xi,
-        yi,
-        num_elements,
-        REC_DATA,
-        SRC,
-        elemInclude,
-        tx_include,
-        ind_matlab,  # ahora pasamos el índice col-major
-        c_init,
-        f,
-        Niter,
-        a0,
-        L_PML,
-        explicit_indices,
-        mask_indices,
-    )
+    print("WV shape:", WV.shape)
 
-    # -------------------------
-    # 5) Visualization
-    # -------------------------
-    crange = [1400, 1600]
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+    # print("Running Nonlinear Conjugate Gradient...")
+    # VEL_F, SD_F, GRAD_F = nonlinear_conjugate_gradient(
+    #     xi,
+    #     yi,
+    #     num_elements,
+    #     REC_DATA,
+    #     SRC,
+    #     elemInclude,
+    #     tx_include,
+    #     ind_matlab,  # ahora pasamos el índice col-major
+    #     c_init,
+    #     f,
+    #     Niter,
+    #     a0,
+    #     L_PML,
+    #     explicit_indices,
+    #     mask_indices,
+    # )
 
-    # True speed
-    axs[0, 0].imshow(
-        C,
-        extent=[x.min(), x.max(), y.max(), y.min()],
-        vmin=crange[0],
-        vmax=crange[1],
-        cmap="gray",
-        origin="upper",
-    )
-    axs[0, 0].set_title("True Sound Speed [m/s]")
-    axs[0, 0].axis("image")
-    plt.colorbar(axs[0, 0].images[0], ax=axs[0, 0])
+    # # -------------------------
+    # # 5) Visualization
+    # # -------------------------
+    # crange = [1400, 1600]
+    # fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
-    # Estimated speed
-    axs[0, 1].imshow(
-        VEL_F,
-        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-        vmin=crange[0],
-        vmax=crange[1],
-        cmap="gray",
-        origin="upper",
-    )
-    axs[0, 1].set_title("Estimated Speed Iter  " + str(Niter))
-    axs[0, 1].axis("image")
-    plt.colorbar(axs[0, 1].images[0], ax=axs[0, 1])
+    # # True speed
+    # axs[0, 0].imshow(
+    #     C,
+    #     extent=[x.min(), x.max(), y.max(), y.min()],
+    #     vmin=crange[0],
+    #     vmax=crange[1],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # axs[0, 0].set_title("True Sound Speed [m/s]")
+    # axs[0, 0].axis("image")
+    # plt.colorbar(axs[0, 0].images[0], ax=axs[0, 0])
 
-    # Search direction
-    axs[1, 0].imshow(
-        SD_F,
-        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-        cmap="gray",
-        origin="upper",
-    )
-    axs[1, 0].set_title("Search Direction")
-    axs[1, 0].axis("image")
-    plt.colorbar(axs[1, 0].images[0], ax=axs[1, 0])
+    # # Estimated speed
+    # axs[0, 1].imshow(
+    #     VEL_F,
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     vmin=crange[0],
+    #     vmax=crange[1],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # axs[0, 1].set_title("Estimated Speed Iter  " + str(Niter))
+    # axs[0, 1].axis("image")
+    # plt.colorbar(axs[0, 1].images[0], ax=axs[0, 1])
 
-    # Negative gradient
-    axs[1, 1].imshow(
-        -GRAD_F,
-        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-        cmap="gray",
-        origin="upper",
-    )
-    axs[1, 1].set_title("Negative Gradient")
-    axs[1, 1].axis("image")
-    plt.colorbar(axs[1, 1].images[0], ax=axs[1, 1])
+    # # Search direction
+    # axs[1, 0].imshow(
+    #     SD_F,
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # axs[1, 0].set_title("Search Direction")
+    # axs[1, 0].axis("image")
+    # plt.colorbar(axs[1, 0].images[0], ax=axs[1, 0])
 
-    plt.tight_layout()
-    plt.show()
+    # # Negative gradient
+    # axs[1, 1].imshow(
+    #     -GRAD_F,
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # axs[1, 1].set_title("Negative Gradient")
+    # axs[1, 1].axis("image")
+    # plt.colorbar(axs[1, 1].images[0], ax=axs[1, 1])
+
+    # plt.tight_layout()
+    # plt.show()
 
 
 if __name__ == "__main__":
