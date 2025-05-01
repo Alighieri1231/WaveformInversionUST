@@ -85,6 +85,8 @@ for iter = 1:Niter
     % Step 1: Calculate Gradient/Backprojection
     % (1A) Solve Forward Helmholtz Equation (H is Helmholtz matrix and u is the wavefield)
     tic; WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, SRC, f, a0, L_PML, false);
+
+
     % (1B) Estimate Forward Sources and Adjust Simulated Fields Accordingly
     SRC_ESTIM = zeros(1,1,numel(tx_include));
     for tx_elmt_idx = 1:numel(tx_include)
@@ -112,6 +114,12 @@ for iter = 1:Niter
     VIRT_SRC = ((2*(2*pi*f).^2).*SLOW_ESTIM).*WVFIELD;
     % (1E) Backproject Error (Gradient = Backprojection)
     ADJ_WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, ADJ_SRC, f, a0, L_PML, true);
+    figure;
+    imagesc(real(ADJ_WVFIELD(:,:,1)))
+    figure;
+    imagesc(imag(ADJ_WVFIELD(:,:,1)))
+    title('add')
+    break
     BACKPROJ = -real(conj(VIRT_SRC).*ADJ_WVFIELD);
     gradient_img = sum(BACKPROJ,3);
     disp(['grad ' +num2str(norm(gradient_img))])
@@ -168,7 +176,7 @@ for iter = 1:Niter
         case 3 % Involving Gradient AND Search Direction
             stepSize = -(gradient_img(:)'*search_dir(:)) / ...
                 (dREC_SIM(:)'*dREC_SIM(:));
-        
+
     end
     disp(num2str(stepSize))
     SLOW_ESTIM = SLOW_ESTIM + stepSize * search_dir;

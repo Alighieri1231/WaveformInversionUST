@@ -77,32 +77,87 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 8  # prueba rápida
-    VEL = c_init * jnp.ones((Nyi, Nxi))
-    print("Initial VEL shape:", VEL.shape)
-    WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
+    Niter = 1  # prueba rápida
+    # VEL = c_init * jnp.ones((Nyi, Nxi))
+    # print("Initial VEL shape:", VEL.shape)
+    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-    print("WV shape:", WV.shape)
+    # print("WV shape:", WV.shape)
 
-    # print("Running Nonlinear Conjugate Gradient...")
-    # VEL_F, SD_F, GRAD_F = nonlinear_conjugate_gradient(
-    #     xi,
-    #     yi,
-    #     num_elements,
-    #     REC_DATA,
-    #     SRC,
-    #     elemInclude,
-    #     tx_include,
-    #     ind_matlab,  # ahora pasamos el índice col-major
-    #     c_init,
-    #     f,
-    #     Niter,
-    #     a0,
-    #     L_PML,
-    #     explicit_indices,
-    #     mask_indices,
+    # # show first wavefield
+    # plt.imshow(
+    #     jnp.abs(WV[:, :, 0]),
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     cmap="gray",
+    #     origin="upper",
     # )
+    # plt.title("Wavefield")
+    # plt.show()
 
+    # plt.imshow(
+    #     jnp.real(WV[:, :, 0]),
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # plt.title("Wavefield")
+    # plt.show()
+    # plt.imshow(
+    #     jnp.imag(WV[:, :, 0]),
+    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+    #     cmap="gray",
+    #     origin="upper",
+    # )
+    # plt.title("Wavefield")
+    # plt.show()
+    print("Running Nonlinear Conjugate Gradient...")
+    VEL_F, SD_F, GRAD_F, ADJ_WV = nonlinear_conjugate_gradient(
+        xi,
+        yi,
+        num_elements,
+        REC_DATA,
+        SRC,
+        elemInclude,
+        tx_include,
+        ind_matlab,  # ahora pasamos el índice col-major
+        c_init,
+        f,
+        Niter,
+        a0,
+        L_PML,
+        explicit_indices,
+        mask_indices,
+    )
+    vmin, vmax = -1e-14, 1e-14
+
+    plt.figure(figsize=(12, 10))
+
+    # real part
+    ax1 = plt.subplot(1, 2, 1)
+    im1 = ax1.imshow(
+        jnp.real(ADJ_WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax1.set_title("Adjoint Wavefield (real)")
+
+    # imaginary part
+    ax2 = plt.subplot(1, 2, 2)
+    im2 = ax2.imshow(
+        jnp.imag(ADJ_WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax2.set_title("Adjoint Wavefield (imag)")
+
+    plt.tight_layout()
+    plt.show()
     # # -------------------------
     # # 5) Visualization
     # # -------------------------

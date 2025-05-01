@@ -36,9 +36,10 @@ def nonlinear_conjugate_gradient(
     SLOW = 1.0 / VEL
     sd = jnp.zeros((Nyi, Nxi))
     gprev = jnp.zeros((Nyi, Nxi))
+    ADJ_WV = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
 
     def body_fun(state, it):
-        VEL, SLOW, sd, gprev = state
+        VEL, SLOW, sd, gprev, ADJ_WV = state
 
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
@@ -52,7 +53,7 @@ def nonlinear_conjugate_gradient(
             vals = flat[ind_matlab]
             meas = REC_DATA[t, :]
             SRC_EST = SRC_EST.at[t].set(
-                jnp.vdot(vals, meas) / (jnp.vdot(vals, vals) + 1e-12)
+                jnp.vdot(vals, meas) / (jnp.vdot(vals, vals))  # + 1e-12)
             )
         WV = WV * SRC_EST[jnp.newaxis, jnp.newaxis, :]
 
@@ -82,7 +83,7 @@ def nonlinear_conjugate_gradient(
         # 2) Conjugate‐gradient update (Hestenes‐Stiefel)
         dg = grad - gprev
         beta = jnp.vdot(grad.ravel(), dg.ravel()) / (
-            jnp.vdot(sd.ravel(), dg.ravel()) + 1e-12
+            jnp.vdot(sd.ravel(), dg.ravel())  # + 1e-12
         )
         sd_new = beta * sd - grad
 
@@ -114,9 +115,9 @@ def nonlinear_conjugate_gradient(
             vmax=jnp.max(VEL_new),
         )
 
-        return (VEL_new, SLOW_new, sd_new, grad), None
+        return (VEL_new, SLOW_new, sd_new, grad, ADJ_WV), None
 
-    (VEL_F, _, sd_F, grad_F), _ = jax.lax.scan(
-        body_fun, (VEL, SLOW, sd, gprev), jnp.arange(Niter)
+    (VEL_F, _, sd_F, grad_F, ADJ_WV), _ = jax.lax.scan(
+        body_fun, (VEL, SLOW, sd, gprev, ADJ_WV), jnp.arange(Niter)
     )
-    return VEL_F, sd_F, grad_F
+    return VEL_F, sd_F, grad_F, ADJ_WV

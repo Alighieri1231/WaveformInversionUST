@@ -4,6 +4,9 @@ from jax import jit
 from jax.experimental.sparse.linalg import spsolve
 from jax.experimental import sparse as jsparse
 
+# time analysis with tic toc
+import time
+
 
 def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     sign_convention = -1
@@ -49,10 +52,10 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     # for version
     # H = for_hemholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
     # vectorized version
-    print("Assembling Helmholtz matrix...")
+    # print("Assembling Helmholtz matrix...")
     H_bcoo = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
-    print("Assembled Helmholtz matrix.")
-    print("H_bcoo", H_bcoo.shape)
+    # print("Assembled Helmholtz matrix.")
+    # print("H_bcoo", H_bcoo.shape)
     # 1) Elige la matriz correcta: H o H^*
     if adjoint:
         H_t = H_bcoo.transpose()  # sigue siendo BCOO
@@ -65,16 +68,24 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
 
     # reshape src to Nx*Ny and -1 to get the right shape
     rhs = jnp.reshape(src, (Nx * Ny, -1))
+    # print("rhs shape", rhs.shape)
     # Change type to complex64
     rhs = jnp.array(rhs, dtype=jnp.complex64)
 
     data, indices, indptr = H_use.data, H_use.indices, H_use.indptr
-    print("Solving system...")
+    # print(H_use.indices)
+    # print("non empty values", H_use.data[H_use.data != 0].sum())
+    # print("Solving system...")
     # sol = spsolve(data, indices, indptr, rhs)
+    # tic toc for time analysis
+
+    # start = time.time()
 
     sol = jnp.stack(
         [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
     )
+    ##end = time.time()
+    # print("Time taken to solve system:", end - start)
 
     return sol.reshape(Ny, Nx, -1)
 
