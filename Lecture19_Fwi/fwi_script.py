@@ -78,7 +78,7 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 1  # prueba rápida
+    Niter = 5  # prueba rápida
     VEL = c_init * jnp.ones((Nyi, Nxi))
     # print("Initial VEL shape:", VEL.shape)
     # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, True)
