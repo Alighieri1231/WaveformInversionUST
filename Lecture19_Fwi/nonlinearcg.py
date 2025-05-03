@@ -90,10 +90,38 @@ def nonlinear_conjugate_gradient(
 
         # 2) Conjugate‐gradient update (Hestenes‐Stiefel)
         dg = grad - gprev
-        beta = jnp.vdot(grad.conj().T.ravel(order="F"), dg.ravel(order="F")) / (
+        raw_beta = jnp.vdot(grad.conj().T.ravel(order="F"), dg.ravel(order="F")) / (
             jnp.vdot(sd.conj().T.ravel(order="F"), dg.ravel(order="F"))  # + 1e-12
         )
+
+        beta = jax.lax.cond((it == 0), lambda _: 0.0, lambda _: raw_beta, operand=None)
+
+        jax.debug.print(
+            "iter={i} grad={g} sd.sum={s:.3e}",
+            i=it,
+            g=jnp.linalg.norm(grad),
+            s=jnp.linalg.norm(sd),
+        )
+
+        # print beta sd and grad shape
+        jax.debug.print(
+            "iter={i} beta={b:.3e} sd.shape={s} grad.shape={g}",
+            i=it,
+            b=beta,
+            s=sd.shape,
+            g=grad.shape,
+        )
+
+        # check if grad is zero and sd is zero
+        # jax.debug.print(jnp.linalg.norm(grad))
+        # jax.debug.print(jnp.linalg.norm(sd))
+        jax.debug.print(
+            "iter={i} grad={g} sd.sum={s:.3e}", i=it, g=jnp.sum(grad), s=jnp.sum(sd)
+        )
+
         sd_new = beta * sd - grad
+        # show the sum of sd_new
+        jax.debug.print("iter={i} sd_new.sum={s:.3e}", i=it, s=jnp.sum(sd_new))
 
         # 3) forward project search direction
         PERT = solve_helmholtz(
@@ -106,9 +134,9 @@ def nonlinear_conjugate_gradient(
             Wp = PERT[:, :, t].flatten(order="F")
             vals = Wp[ind_matlab]
             dREC = dREC.at[t, :].set(vals)
-        num = jnp.real(jnp.vdot(dREC.ravel(), (REC_DATA - REC_SIM).ravel()))
-        den = jnp.real(jnp.vdot(dREC.ravel(), dREC.ravel()))
-        # num = -(jnp.vdot(grad.ravel(), sd_new.ravel()))
+        # num = jnp.real(jnp.vdot(dREC.ravel(), (REC_DATA - REC_SIM).ravel()))
+        den = jnp.real(jnp.vdot(dREC.conj().T.ravel(), dREC.ravel()))
+        num = -(jnp.vdot(grad.ravel(), sd_new.ravel()))
         step = num / den  # + 1e-12)
         jax.debug.print("num={n:.3e} den={d:.3e}", n=num, d=den)
         jax.debug.print("iter={i} stepSize={s:.3e}", i=it, s=step)
