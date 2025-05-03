@@ -37,9 +37,10 @@ def nonlinear_conjugate_gradient(
     sd = jnp.zeros((Nyi, Nxi))
     gprev = jnp.zeros((Nyi, Nxi))
     ADJ_WV = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
+    WV = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
 
     def body_fun(state, it):
-        VEL, SLOW, sd, gprev, ADJ_WV = state
+        VEL, SLOW, sd, gprev, ADJ_WV, WV = state
 
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
@@ -50,7 +51,8 @@ def nonlinear_conjugate_gradient(
         SRC_EST = jnp.zeros((len(tx_include),), dtype=jnp.complex64)
         for t in range(len(tx_include)):
             W = WV[:, :, t]
-            flat = W.flatten(order="F")
+            # flat = W.flatten(order="F")
+            flat = W.flatten()
             # values at each receiver element
             vals = flat[ind_matlab]
             meas = REC_DATA[t, :]
@@ -65,7 +67,8 @@ def nonlinear_conjugate_gradient(
         for t in range(len(tx_include)):
             W = WV[:, :, t]
             # flat = W.flatten(order="F")
-            flat = W.flatten(order="F")
+            # flat = W.flatten(order="F")
+            flat = W.flatten()
             # simulated rec at included receivers
             grid_inds = ind_matlab[mask_indices[t]]
             sim_vals = flat[grid_inds]
@@ -87,8 +90,8 @@ def nonlinear_conjugate_gradient(
 
         # 2) Conjugate‐gradient update (Hestenes‐Stiefel)
         dg = grad - gprev
-        beta = jnp.vdot(grad.ravel(), dg.ravel()) / (
-            jnp.vdot(sd.ravel(), dg.ravel())  # + 1e-12
+        beta = jnp.vdot(grad.conj().T.ravel(order="F"), dg.ravel(order="F")) / (
+            jnp.vdot(sd.conj().T.ravel(order="F"), dg.ravel(order="F"))  # + 1e-12
         )
         sd_new = beta * sd - grad
 
@@ -120,9 +123,9 @@ def nonlinear_conjugate_gradient(
             vmax=jnp.max(VEL_new),
         )
 
-        return (VEL_new, SLOW_new, sd_new, grad, ADJ_WV), None
+        return (VEL_new, SLOW_new, sd_new, grad, ADJ_WV, WV), None
 
-    (VEL_F, _, sd_F, grad_F, ADJ_WV), _ = jax.lax.scan(
-        body_fun, (VEL, SLOW, sd, gprev, ADJ_WV), jnp.arange(Niter)
+    (VEL_F, _, sd_F, grad_F, ADJ_WV, WV), _ = jax.lax.scan(
+        body_fun, (VEL, SLOW, sd, gprev, ADJ_WV, WV), jnp.arange(Niter)
     )
-    return VEL_F, sd_F, grad_F, ADJ_WV
+    return VEL_F, sd_F, grad_F, ADJ_WV, WV

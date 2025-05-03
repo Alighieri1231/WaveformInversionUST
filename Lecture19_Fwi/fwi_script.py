@@ -56,8 +56,9 @@ def main():
     y_idx = tree_y.query(y_circ.reshape(-1, 1))[1]
 
     # MATLAB‐style linear index (column‐major, zero‐based)
-    ind_matlab = x_idx * Nyi + y_idx
-
+    # ind_matlab = x_idx * Nyi + y_idx
+    # ind_matlab = y_idx * Nyi + x_idx
+    ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
     SRC = jnp.zeros((Nyi, Nxi, tx_include.size), dtype=jnp.complex64)
     for i, t in enumerate(tx_include):
@@ -117,7 +118,7 @@ def main():
     # plt.show()
 
     print("Running Nonlinear Conjugate Gradient...")
-    VEL_F, SD_F, GRAD_F, ADJ_WV = nonlinear_conjugate_gradient(
+    VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
         xi,
         yi,
         num_elements,
@@ -134,36 +135,53 @@ def main():
         explicit_indices,
         mask_indices,
     )
-    # vmin, vmax = -1e-14, 1e-14
+    vmin, vmax = -1e-14, 1e-14
 
-    # plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(12, 10))
 
-    # # real part
-    # ax1 = plt.subplot(1, 2, 1)
-    # im1 = ax1.imshow(
-    #     jnp.real(ADJ_WV[:, :, 0]),
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     cmap="gray",
-    #     origin="upper",
-    #     vmin=vmin,
-    #     vmax=vmax,
-    # )
-    # ax1.set_title("Adjoint Wavefield (real)")
+    # real part
+    ax1 = plt.subplot(2, 2, 1)
+    im1 = ax1.imshow(
+        jnp.real(ADJ_WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax1.set_title("Adjoint Wavefield (real)")
 
-    # # imaginary part
-    # ax2 = plt.subplot(1, 2, 2)
-    # im2 = ax2.imshow(
-    #     jnp.imag(ADJ_WV[:, :, 0]),
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     cmap="gray",
-    #     origin="upper",
-    #     vmin=vmin,
-    #     vmax=vmax,
-    # )
-    # ax2.set_title("Adjoint Wavefield (imag)")
+    # imaginary part
+    ax2 = plt.subplot(2, 2, 2)
+    im2 = ax2.imshow(
+        jnp.imag(ADJ_WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax2.set_title("Adjoint Wavefield (imag)")
 
-    # plt.tight_layout()
-    # plt.show()
+    ax3 = plt.subplot(2, 2, 3)
+    im3 = ax3.imshow(
+        jnp.real(WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+    )
+    ax3.set_title("Forward Wavefield (real)")
+    ax4 = plt.subplot(2, 2, 4)
+    im4 = ax4.imshow(
+        jnp.imag(WV[:, :, 0]),
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+    )
+    ax4.set_title("Forward Wavefield (imag)")
+
+    plt.tight_layout()
+    plt.show()
     # # -------------------------
     # 5) Visualization
     # -------------------------
