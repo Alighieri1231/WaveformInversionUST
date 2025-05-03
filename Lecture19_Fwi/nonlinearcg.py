@@ -78,6 +78,8 @@ def nonlinear_conjugate_gradient(
         VIRT = (2 * (2 * jnp.pi * f) ** 2) * SLOW[:, :, None] * WV
 
         # 1e) backpropagate
+
+        # because of the error the element is in other part
         ADJ_WV = solve_helmholtz(xi, yi, VEL, ADJ_SRC, f, a0, L_PML, True)
         BACK = -jnp.real(jnp.conj(VIRT) * ADJ_WV)
         grad = jnp.sum(BACK, axis=2)
