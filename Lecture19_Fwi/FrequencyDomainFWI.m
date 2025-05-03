@@ -39,7 +39,7 @@ momentumFormula = 4; % Momentum Formula for Conjugate Gradient
                      % 2 -- Polak-Ribiere (PR)
                      % 3 -- Combined FR + PR
                      % 4 -- Hestenes-Stiefel (HS)
-stepSizeCalculation = 1; % Which Step Size Calculation:
+stepSizeCalculation = 3; % Which Step Size Calculation:
                          % 1 -- Not Involving Gradient Nor Search Direction
                          % 2 -- Involving Gradient BUT NOT Search Direction
                          % 3 -- Involving Gradient AND Search Direction
