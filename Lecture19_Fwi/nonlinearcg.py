@@ -134,9 +134,13 @@ def nonlinear_conjugate_gradient(
             Wp = PERT[:, :, t].flatten(order="F")
             vals = Wp[ind_matlab]
             dREC = dREC.at[t, :].set(vals)
-        # num = jnp.real(jnp.vdot(dREC.ravel(), (REC_DATA - REC_SIM).ravel()))
-        den = jnp.real(jnp.vdot(dREC.conj().T.ravel(), dREC.ravel()))
-        num = -(jnp.vdot(grad.ravel(), sd_new.ravel()))
+        num = jnp.real(
+            jnp.vdot(
+                dREC.conj().T.ravel(order="F"), (REC_DATA - REC_SIM).ravel(order="F")
+            )
+        )
+        den = jnp.real(jnp.vdot(dREC.conj().T.ravel(order="F"), dREC.ravel(order="F")))
+        # num = -(jnp.vdot(grad.conj().T.ravel(order="F"), sd_new.ravel(order="F")))
         step = num / den  # + 1e-12)
         jax.debug.print("num={n:.3e} den={d:.3e}", n=num, d=den)
         jax.debug.print("iter={i} stepSize={s:.3e}", i=it, s=step)
