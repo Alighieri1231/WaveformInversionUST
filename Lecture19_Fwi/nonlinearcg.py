@@ -44,6 +44,8 @@ def nonlinear_conjugate_gradient(
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
+        ###Error here
+
         # 1b) estimate source strengths
         SRC_EST = jnp.zeros((len(tx_include),), dtype=jnp.complex64)
         for t in range(len(tx_include)):
@@ -62,6 +64,7 @@ def nonlinear_conjugate_gradient(
         REC_SIM = jnp.zeros((len(tx_include), numElements), dtype=jnp.complex64)
         for t in range(len(tx_include)):
             W = WV[:, :, t]
+            # flat = W.flatten(order="F")
             flat = W.flatten(order="F")
             # simulated rec at included receivers
             grid_inds = ind_matlab[mask_indices[t]]

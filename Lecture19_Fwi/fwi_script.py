@@ -78,11 +78,12 @@ def main():
     # -------------------------
     c_init = 1480.0
     Niter = 1  # prueba rápida
-    # VEL = c_init * jnp.ones((Nyi, Nxi))
+    VEL = c_init * jnp.ones((Nyi, Nxi))
     # print("Initial VEL shape:", VEL.shape)
-    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
+    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, True)
 
     # print("WV shape:", WV.shape)
+    # vmin, vmax = -1e-14, 1e-14
 
     # # show first wavefield
     # plt.imshow(
@@ -99,6 +100,8 @@ def main():
     #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
     #     cmap="gray",
     #     origin="upper",
+    #     vmin=vmin,
+    #     vmax=vmax,
     # )
     # plt.title("Wavefield")
     # plt.show()
@@ -107,9 +110,12 @@ def main():
     #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
     #     cmap="gray",
     #     origin="upper",
+    #     vmin=vmin,
+    #     vmax=vmax,
     # )
     # plt.title("Wavefield")
     # plt.show()
+
     print("Running Nonlinear Conjugate Gradient...")
     VEL_F, SD_F, GRAD_F, ADJ_WV = nonlinear_conjugate_gradient(
         xi,
@@ -128,92 +134,92 @@ def main():
         explicit_indices,
         mask_indices,
     )
-    vmin, vmax = -1e-14, 1e-14
+    # vmin, vmax = -1e-14, 1e-14
 
-    plt.figure(figsize=(12, 10))
+    # plt.figure(figsize=(12, 10))
 
-    # real part
-    ax1 = plt.subplot(1, 2, 1)
-    im1 = ax1.imshow(
-        jnp.real(ADJ_WV[:, :, 0]),
-        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-        cmap="gray",
-        origin="upper",
-        vmin=vmin,
-        vmax=vmax,
-    )
-    ax1.set_title("Adjoint Wavefield (real)")
-
-    # imaginary part
-    ax2 = plt.subplot(1, 2, 2)
-    im2 = ax2.imshow(
-        jnp.imag(ADJ_WV[:, :, 0]),
-        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-        cmap="gray",
-        origin="upper",
-        vmin=vmin,
-        vmax=vmax,
-    )
-    ax2.set_title("Adjoint Wavefield (imag)")
-
-    plt.tight_layout()
-    plt.show()
-    # # -------------------------
-    # # 5) Visualization
-    # # -------------------------
-    # crange = [1400, 1600]
-    # fig, axs = plt.subplots(2, 2, figsize=(12, 10))
-
-    # # True speed
-    # axs[0, 0].imshow(
-    #     C,
-    #     extent=[x.min(), x.max(), y.max(), y.min()],
-    #     vmin=crange[0],
-    #     vmax=crange[1],
-    #     cmap="gray",
-    #     origin="upper",
-    # )
-    # axs[0, 0].set_title("True Sound Speed [m/s]")
-    # axs[0, 0].axis("image")
-    # plt.colorbar(axs[0, 0].images[0], ax=axs[0, 0])
-
-    # # Estimated speed
-    # axs[0, 1].imshow(
-    #     VEL_F,
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     vmin=crange[0],
-    #     vmax=crange[1],
-    #     cmap="gray",
-    #     origin="upper",
-    # )
-    # axs[0, 1].set_title("Estimated Speed Iter  " + str(Niter))
-    # axs[0, 1].axis("image")
-    # plt.colorbar(axs[0, 1].images[0], ax=axs[0, 1])
-
-    # # Search direction
-    # axs[1, 0].imshow(
-    #     SD_F,
+    # # real part
+    # ax1 = plt.subplot(1, 2, 1)
+    # im1 = ax1.imshow(
+    #     jnp.real(ADJ_WV[:, :, 0]),
     #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
     #     cmap="gray",
     #     origin="upper",
+    #     vmin=vmin,
+    #     vmax=vmax,
     # )
-    # axs[1, 0].set_title("Search Direction")
-    # axs[1, 0].axis("image")
-    # plt.colorbar(axs[1, 0].images[0], ax=axs[1, 0])
+    # ax1.set_title("Adjoint Wavefield (real)")
 
-    # # Negative gradient
-    # axs[1, 1].imshow(
-    #     -GRAD_F,
+    # # imaginary part
+    # ax2 = plt.subplot(1, 2, 2)
+    # im2 = ax2.imshow(
+    #     jnp.imag(ADJ_WV[:, :, 0]),
     #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
     #     cmap="gray",
     #     origin="upper",
+    #     vmin=vmin,
+    #     vmax=vmax,
     # )
-    # axs[1, 1].set_title("Negative Gradient")
-    # axs[1, 1].axis("image")
-    # plt.colorbar(axs[1, 1].images[0], ax=axs[1, 1])
+    # ax2.set_title("Adjoint Wavefield (imag)")
 
     # plt.tight_layout()
     # plt.show()
+    # # -------------------------
+    # 5) Visualization
+    # -------------------------
+    crange = [1400, 1600]
+    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+
+    # True speed
+    axs[0, 0].imshow(
+        C,
+        extent=[x.min(), x.max(), y.max(), y.min()],
+        vmin=crange[0],
+        vmax=crange[1],
+        cmap="gray",
+        origin="upper",
+    )
+    axs[0, 0].set_title("True Sound Speed [m/s]")
+    axs[0, 0].axis("image")
+    plt.colorbar(axs[0, 0].images[0], ax=axs[0, 0])
+
+    # Estimated speed
+    axs[0, 1].imshow(
+        VEL_F,
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        vmin=crange[0],
+        vmax=crange[1],
+        cmap="gray",
+        origin="upper",
+    )
+    axs[0, 1].set_title("Estimated Speed Iter  " + str(Niter))
+    axs[0, 1].axis("image")
+    plt.colorbar(axs[0, 1].images[0], ax=axs[0, 1])
+
+    # Search direction
+    axs[1, 0].imshow(
+        SD_F,
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+    )
+    axs[1, 0].set_title("Search Direction")
+    axs[1, 0].axis("image")
+    plt.colorbar(axs[1, 0].images[0], ax=axs[1, 0])
+
+    # Negative gradient
+    axs[1, 1].imshow(
+        -GRAD_F,
+        extent=[xi.min(), xi.max(), yi.max(), yi.min()],
+        cmap="gray",
+        origin="upper",
+    )
+    axs[1, 1].set_title("Negative Gradient")
+    axs[1, 1].axis("image")
+    plt.colorbar(axs[1, 1].images[0], ax=axs[1, 1])
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
