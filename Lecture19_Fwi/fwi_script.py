@@ -57,8 +57,8 @@ def main():
 
     # MATLAB‐style linear index (column‐major, zero‐based)
     # ind_matlab = x_idx * Nyi + y_idx
-    # ind_matlab = y_idx * Nyi + x_idx
-    ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
+    ind_matlab = y_idx * Nyi + x_idx
+    # ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
     SRC = jnp.zeros((Nyi, Nxi, tx_include.size), dtype=jnp.complex64)
     for i, t in enumerate(tx_include):
@@ -78,12 +78,14 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 5  # prueba rápida
+    Niter = 1  # prueba rápida
     VEL = c_init * jnp.ones((Nyi, Nxi))
-    # print("Initial VEL shape:", VEL.shape)
-    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, True)
+    print("Initial VEL shape:", VEL.shape)
+
+    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
     # print("WV shape:", WV.shape)
+
     # vmin, vmax = -1e-14, 1e-14
 
     # # show first wavefield

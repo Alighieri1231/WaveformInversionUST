@@ -127,7 +127,6 @@ end
 
 % Generate Left-Hand Side of Sparse Array
 HelmholtzEqn = sparse(rows, cols, vals, Nx*Ny, Nx*Ny);
-disp(class(HelmholtzEqn))
 
 % Solve the Helmholtz Equation - Brute-force CPU solution of linear system
 if adjoint
@@ -136,8 +135,7 @@ else
     sol = HelmholtzEqn\reshape(src,[Nx*Ny, numel(src)/(Nx*Ny)]);
 end
 wvfield = reshape(sol, size(src));
-disp('1')
-disp(class(wvfield))
+
 end
 
 
