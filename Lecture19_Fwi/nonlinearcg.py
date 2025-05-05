@@ -12,6 +12,7 @@ from solve_helmholtz import solve_helmholtz
 # 1) Nonlinear Conjugate Gradient (FWI) with correct Fortran‐ordering indexing
 # -----------------------------------------------------------------------------
 # @partial(jax.jit, static_argnums=(2, 8, 9, 10, 11))
+# @partial(jax.jit, static_argnums=(2, 6, 10, 12, 13))  # actualiza según corresponda
 def nonlinear_conjugate_gradient(
     xi,
     yi,
@@ -45,6 +46,8 @@ def nonlinear_conjugate_gradient(
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
+        jax.debug.print("iter={i} ||WV||={n:.3e}", i=it, n=jnp.linalg.norm(WV))
+
         ###Error here
 
         # 1b) estimate source strengths
@@ -52,7 +55,7 @@ def nonlinear_conjugate_gradient(
         for t in range(len(tx_include)):
             W = WV[:, :, t]
             # flat = W.flatten(order="F")
-            flat = W.flatten()
+            flat = W.ravel(order="F")
             # values at each receiver element
             vals = flat[ind_matlab]
             meas = REC_DATA[t, :]
@@ -61,13 +64,15 @@ def nonlinear_conjugate_gradient(
             )
         WV = WV * SRC_EST[jnp.newaxis, jnp.newaxis, :]
 
+        jax.debug.print("iter={i} ||WV src||={n:.3e}", i=it, n=jnp.linalg.norm(WV))
+
         # 1c) build adjoint sources
         ADJ = jnp.zeros((Nyi * Nxi, len(tx_include)), dtype=jnp.complex64)
         REC_SIM = jnp.zeros((len(tx_include), numElements), dtype=jnp.complex64)
         for t in range(len(tx_include)):
             W = WV[:, :, t]
             # flat = W.flatten(order="F")
-            # flat = W.flatten(order="F")
+            # flat = W.s(order="F")
             flat = W.flatten()
             # simulated rec at included receivers
             grid_inds = ind_matlab[mask_indices[t]]
@@ -84,6 +89,9 @@ def nonlinear_conjugate_gradient(
 
         # because of the error the element is in other part
         ADJ_WV = solve_helmholtz(xi, yi, VEL, ADJ_SRC, f, a0, L_PML, True)
+
+        jax.debug.print("iter={i} ||adj wv||={n:.3e}", i=it, n=jnp.linalg.norm(ADJ_WV))
+
         BACK = -jnp.real(jnp.conj(VIRT) * ADJ_WV)
         grad = jnp.sum(BACK, axis=2)
         jax.debug.print("iter={i} ||grad||={n:.3e}", i=it, n=jnp.linalg.norm(grad))
@@ -131,7 +139,7 @@ def nonlinear_conjugate_gradient(
         # 4) line search
         dREC = jnp.zeros((len(tx_include), numElements), dtype=jnp.complex64)
         for t in range(len(tx_include)):
-            Wp = PERT[:, :, t].flatten(order="F")
+            Wp = PERT[:, :, t].flatten()
             vals = Wp[ind_matlab]
             dREC = dREC.at[t, :].set(vals)
         num = jnp.real(
