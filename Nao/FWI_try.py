@@ -10,6 +10,8 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import time
 
+#jax.config.update("jax_enable_x64", True)
+
 def stencilOptParams(vmin,vmax,f,h,g):
 #STENCILOPTPARAMS Optimal Params for 9-Point Stencil 
 #   INPUTS:
@@ -213,7 +215,7 @@ def solveHelmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
 
 
 #Load data problem
-data = mat73.loadmat('RecordedData.mat', use_attrdict=True)
+data = mat73.loadmat('RecordedData_test.mat', use_attrdict=True)
 x      = jnp.array(data['x'],      dtype=jnp.float32)
 y        = jnp.array(data['y'],      dtype=jnp.float32)
 C        = jnp.array(data['C'],      dtype=jnp.float32)
@@ -234,7 +236,7 @@ tx_include = jnp.arange(0,numElements,dwnsmp)
 REC_DATA = REC_DATA[tx_include,:]
 
 # Extract Subset of Signals within Acceptance Angle
-numElemLeftRightExcl = 31
+numElemLeftRightExcl = 3
 elemLeftRightExcl    = jnp.arange(-numElemLeftRightExcl,numElemLeftRightExcl + 1)
 elem_include         = jnp.ones((numElements, numElements),dtype=bool)
 
@@ -299,7 +301,7 @@ for iter in range(Niter):
     WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, SRC, f_data, a0, L_PML, False)
     
     # (1B) Estimate forward sources
-    SRC_ESTIM = jnp.zeros((tx_include.size,), dtype=jnp.float32)
+    SRC_ESTIM = jnp.zeros((tx_include.size,), dtype=jnp.complex64)
     for tx_elmt_idx in range(tx_include.size):
         # extract the single‐shot wavefield and flatten
         wv = WVFIELD[..., tx_elmt_idx].ravel()                    # length = Nyi*Nxi
@@ -309,7 +311,7 @@ for iter in range(Niter):
         # source estimate = (rec_sim' * rec) / (rec_sim' * rec_sim)
         num   = jnp.vdot(rec_sim, rec)
         denom = jnp.vdot(rec_sim, rec_sim) + 1e-12
-        SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num/denom).real)
+        SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num/denom))
     # scale the forward wavefield by the estimated source amplitudes
     WVFIELD = WVFIELD * SRC_ESTIM[None, None, :]
 
@@ -373,18 +375,18 @@ for iter in range(Niter):
         dREC_SIM = dREC_SIM.at[tx_elmt_idx, mask].set(vals)
 
     # (4) Step‐size via line search
-    REC_SIM_flat = REC_SIM2.flatten()
-    dREC_flat    = dREC_SIM.flatten()
-    g_flat       = gradient_img.flatten()
-    sd_flat      = search_dir.flatten()
+    REC_SIM_flat = REC_SIM2.ravel()
+    dREC_flat    = dREC_SIM.ravel()
+    g_flat       = gradient_img.ravel()
+    sd_flat      = search_dir.ravel()
 
     if stepSizeCalculation == 1:
-        stepSize = jnp.real((dREC_flat @ (REC_DATA.flatten() - REC_SIM_flat))
-                            / (dREC_flat @ dREC_flat + 1e-12))
+        stepSize = jnp.real((dREC_flat @ (REC_DATA.ravel() - REC_SIM_flat))
+                            / (dREC_flat @ dREC_flat))
     elif stepSizeCalculation == 2:
-        stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat + 1e-12)
+        stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat)
     else:  # involving search direction
-        stepSize = -(g_flat @ sd_flat) / (dREC_flat @ sd_flat + 1e-12)
+        stepSize = -(g_flat @ sd_flat) / (dREC_flat @ sd_flat)
 
     # update slowness & velocity
     SLOW_ESTIM = SLOW_ESTIM + stepSize * search_dir
@@ -411,3 +413,4 @@ for iter in range(Niter):
 
     plt.suptitle(f'Iteration {iter} (t={time.time()-t0:.2f}s)')
     plt.draw(); plt.pause(1e-3)
+    plt.show()
