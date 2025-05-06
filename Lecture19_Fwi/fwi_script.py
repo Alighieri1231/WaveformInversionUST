@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from HelperFunctions import imagesc
 import numpy as np
 from solve_helmholtz import solve_helmholtz
+import mat73
 
 
 def main():
@@ -15,14 +16,27 @@ def main():
     # 1) Load recorded data
     # -------------------------
     print("Loading data...")
-    data = loadmat("RecordedData1.mat", squeeze_me=True, struct_as_record=False)
-    x = data["x"]
-    y = data["y"]
-    C = data["C"]
-    x_circ = data["x_circ"]
-    y_circ = data["y_circ"]
-    f = float(data["f"])
-    REC_DATA = data["REC_DATA"].astype(np.complex64)
+    # data = loadmat("RecordedData3.mat", squeeze_me=True, struct_as_record=False)
+    # x = data["x"]
+    # y = data["y"]
+    # C = data["C"]
+    # x_circ = data["x_circ"]
+    # y_circ = data["y_circ"]
+    # f = float(data["f"])
+    # REC_DATA = data["REC_DATA"].astype(np.complex64)
+
+    data = mat73.loadmat("RecordedData3.mat", use_attrdict=True)
+    x = jnp.array(data["x"], dtype=jnp.float32)
+    y = jnp.array(data["y"], dtype=jnp.float32)
+    C = jnp.array(data["C"], dtype=jnp.float32)
+    x_circ = jnp.array(data["x_circ"], dtype=jnp.float32)
+    y_circ = jnp.array(data["y_circ"], dtype=jnp.float32)
+    f = jnp.array(data["f"], dtype=jnp.float32)
+
+    REC_DATA = jnp.array(data["REC_DATA"], dtype=jnp.complex64)
+
+    # print norm of REC_DATA
+    print(jnp.linalg.norm(REC_DATA.flatten()))
 
     # -------------------------
     # 2) Preprocessing
@@ -35,13 +49,12 @@ def main():
     REC_DATA = REC_DATA[tx_include, :]
 
     # build mask elemInclude
-    numElemLR = 31
+    numElemLR = 3
     arangeLR = jnp.arange(-numElemLR, numElemLR + 1)
     elemInclude = jnp.ones((num_elements, num_elements), dtype=bool)
     for tx in range(num_elements):
         excl = (arangeLR + tx) % num_elements
         elemInclude = elemInclude.at[tx, excl].set(False)
-
     # grid
     dxi = 0.8e-3
     xmax = 120e-3
@@ -58,6 +71,25 @@ def main():
     # MATLAB‐style linear index (column‐major, zero‐based)
     # ind_matlab = x_idx * Nyi + y_idx
     ind_matlab = y_idx * Nyi + x_idx
+
+    print("ind_matlab shape:", ind_matlab.shape)
+    print(ind_matlab)
+    xc = x_circ.ravel()  # shape (M,)
+    yc = y_circ.ravel()  # shape (M,)
+
+    x_idx = jnp.argmin(jnp.abs(xi[None, :] - xc[:, None]), axis=1)
+    y_idx = jnp.argmin(jnp.abs(yi[None, :] - yc[:, None]), axis=1)
+
+    ind_matlab = x_idx * Nxi + y_idx  # Row majo
+
+    print("ind_matlab shape:", ind_matlab.shape)
+    print(ind_matlab)
+
+    # save ind_matlab as mat file
+    from scipy.io import savemat
+
+    savemat("ind_matlab2.mat", {"ind_matlab2": ind_matlab})
+
     # ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
     SRC = jnp.zeros((Nyi, Nxi, tx_include.size), dtype=jnp.complex64)
@@ -78,9 +110,17 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 1  # prueba rápida
+    Niter = 5  # prueba rápida
     VEL = c_init * jnp.ones((Nyi, Nxi))
     print("Initial VEL shape:", VEL.shape)
+
+    # for t in range(len(tx_include)):
+    #     mask = mask_indices[t]  # array de 193 índices 0-based
+    #     REC= REC_DATA[t, mask]  # == REC(:)
+    #     break
+    # #export elemInclude as mat logical file
+    # from scipy.io import savemat
+    # savemat("REC.mat", {"REC1": REC})
 
     # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
