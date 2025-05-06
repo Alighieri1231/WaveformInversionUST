@@ -76,6 +76,12 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
         lambda H: jsparse.BCOO(
             (jnp.conj(H.transpose().data), H.transpose().indices), shape=H.shape
         ),
+        # lambda H: jsparse.BCOO(
+        #     (H.transpose().data, H.transpose().indices), shape=H.shape
+        # ),
+        # lambda H: jsparse.BCOO(
+        #     (H.transpose().data, H.transpose().indices), shape=H.shape
+        # ),
         lambda H: H,
         H_bcoo,
     )

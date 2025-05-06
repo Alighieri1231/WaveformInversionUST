@@ -48,20 +48,29 @@ def nonlinear_conjugate_gradient(
 
         jax.debug.print("iter={i} ||WV||={n:.3e}", i=it, n=jnp.linalg.norm(WV))
 
+        # show norm of REC_DATA
+        jax.debug.print(
+            "iter={i} ||REC_DATA||={n:.3e}", i=it, n=jnp.linalg.norm(REC_DATA)
+        )
+
         ###Error here
 
         # 1b) estimate source strengths
         SRC_EST = jnp.zeros((len(tx_include),), dtype=jnp.complex64)
         for t in range(len(tx_include)):
             W = WV[:, :, t]
-            # flat = W.flatten(order="F")
             flat = W.ravel(order="F")
-            # values at each receiver element
-            vals = flat[ind_matlab]
-            meas = REC_DATA[t, :]
+            mask = mask_indices[t]  # array de 193 índices 0-based
+
+            # simulated and real at those receivers
+            REC_SIM = flat[ind_matlab[mask]]  # == REC_SIM(:)
+            REC = REC_DATA[t, mask]  # == REC(:)
+
             SRC_EST = SRC_EST.at[t].set(
-                jnp.vdot(vals, meas) / (jnp.vdot(vals, vals))  # + 1e-12)
+                jnp.vdot(REC_SIM.conj().T.ravel(order="F"), REC)
+                / (jnp.vdot(REC_SIM.conj().T.ravel(order="F"), REC_SIM))  # + 1e-12)
             )
+
         WV = WV * SRC_EST[jnp.newaxis, jnp.newaxis, :]
 
         jax.debug.print("iter={i} ||WV src||={n:.3e}", i=it, n=jnp.linalg.norm(WV))
@@ -81,6 +90,12 @@ def nonlinear_conjugate_gradient(
             diff = sim_vals - REC_DATA[t, mask_indices[t]]
             ADJ = ADJ.at[grid_inds, t].set(diff)
         ADJ_SRC = ADJ.reshape((Nyi, Nxi, len(tx_include)))
+        jax.debug.print(
+            "iter={i} REC shape={r} REC_SIM shape={s}",
+            i=it,
+            r=REC.shape,
+            s=REC_SIM.shape,
+        )
 
         # 1d) virtual source
         VIRT = (2 * (2 * jnp.pi * f) ** 2) * SLOW[:, :, None] * WV

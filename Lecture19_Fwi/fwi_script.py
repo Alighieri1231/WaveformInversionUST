@@ -41,7 +41,6 @@ def main():
     for tx in range(num_elements):
         excl = (arangeLR + tx) % num_elements
         elemInclude = elemInclude.at[tx, excl].set(False)
-
     # grid
     dxi = 0.8e-3
     xmax = 120e-3
@@ -56,8 +55,15 @@ def main():
     y_idx = tree_y.query(y_circ.reshape(-1, 1))[1]
 
     # MATLAB‐style linear index (column‐major, zero‐based)
-    # ind_matlab = x_idx * Nyi + y_idx
-    ind_matlab = y_idx * Nyi + x_idx
+    ind_matlab = x_idx * Nyi + y_idx
+    # ind_matlab = y_idx * Nyi + x_idx
+    print("ind_matlab shape:", ind_matlab.shape)
+
+    # save ind_matlab as mat file
+    from scipy.io import savemat
+
+    savemat("ind_matlab2.mat", {"ind_matlab2": ind_matlab})
+
     # ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
     SRC = jnp.zeros((Nyi, Nxi, tx_include.size), dtype=jnp.complex64)
@@ -81,6 +87,14 @@ def main():
     Niter = 1  # prueba rápida
     VEL = c_init * jnp.ones((Nyi, Nxi))
     print("Initial VEL shape:", VEL.shape)
+
+    # for t in range(len(tx_include)):
+    #     mask = mask_indices[t]  # array de 193 índices 0-based
+    #     REC= REC_DATA[t, mask]  # == REC(:)
+    #     break
+    # #export elemInclude as mat logical file
+    # from scipy.io import savemat
+    # savemat("REC.mat", {"REC1": REC})
 
     # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
