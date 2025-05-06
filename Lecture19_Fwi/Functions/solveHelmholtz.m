@@ -43,7 +43,10 @@ lin_idx = @(x_idx, y_idx) y_idx+Ny*(x_idx-1); val_idx = 1;
 
 % Optimal Stencil Parameters
 [b, d, e] = stencilOptParams(min(vel(:)),max(vel(:)),f,h,g);
-
+disp('b')
+disp(num2str(b))
+disp(num2str(d))
+disp(num2str(e))
 
 % Structures to Form Sparse Matrices
 rows = zeros(9*(Nx-2)*(Ny-2)+(Nx*Ny-(Nx-2)*(Ny-2)),1);
@@ -127,7 +130,6 @@ end
 
 % Generate Left-Hand Side of Sparse Array
 HelmholtzEqn = sparse(rows, cols, vals, Nx*Ny, Nx*Ny);
-
 % Solve the Helmholtz Equation - Brute-force CPU solution of linear system
 if adjoint
     sol = (HelmholtzEqn')\reshape(src,[Nx*Ny, numel(src)/(Nx*Ny)]);

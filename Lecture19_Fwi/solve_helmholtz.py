@@ -54,10 +54,8 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     C = (ex * ey)[::2, ::2]
 
     b, d, e = stencil_opt_params(jnp.min(vel), jnp.max(vel), f, h, g)
-    # for version
-    # H = for_hemholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
-    # vectorized version
-    # print("Assembling Helmholtz matrix...")
+    # show
+
     H_bcoo = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
     # print("Assembled Helmholtz matrix.")
     # print("H_bcoo", H_bcoo.shape)
