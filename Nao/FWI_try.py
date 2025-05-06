@@ -10,7 +10,6 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import time
 
-<<<<<<< HEAD
 #jax.config.update("jax_enable_x64", True)
 
 def stencilOptParams(vmin,vmax,f,h,g):
@@ -23,19 +22,6 @@ def stencilOptParams(vmin,vmax,f,h,g):
 #       g = (grid spacing in Y [L])/(grid spacing in X [L])
 #   OUTPUTS:
 #       b, d, e = optimal params according to Chen/Cheng/Feng/Wu 2013 Paper
-=======
-
-def stencilOptParams(vmin, vmax, f, h, g):
-    # STENCILOPTPARAMS Optimal Params for 9-Point Stencil
-    #   INPUTS:
-    #       vmin = minimum wave velocity [L/T]
-    #       vmax = maximum wave velocity [L/T]
-    #       f = frequency [1/T]
-    #       h = grid spacing in X [L]
-    #       g = (grid spacing in Y [L])/(grid spacing in X [L])
-    #   OUTPUTS:
-    #       b, d, e = optimal params according to Chen/Cheng/Feng/Wu 2013 Paper
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c
 
     l = 100
     r = 10
@@ -270,7 +256,6 @@ def solveHelmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     return sol.reshape(Ny, Nx, -1)
 
 
-<<<<<<< HEAD
 #Load data problem
 data = mat73.loadmat('RecordedData_test.mat', use_attrdict=True)
 x      = jnp.array(data['x'],      dtype=jnp.float32)
@@ -279,16 +264,6 @@ C        = jnp.array(data['C'],      dtype=jnp.float32)
 x_circ   = jnp.array(data['x_circ'], dtype=jnp.float32)
 y_circ   = jnp.array(data['y_circ'], dtype=jnp.float32)
 f_data   = jnp.array(data['f'],      dtype=jnp.float32)
-=======
-# Load data problem
-data = mat73.loadmat("RecordedData32.mat", use_attrdict=True)
-x = jnp.array(data["x"], dtype=jnp.float32)
-y = jnp.array(data["y"], dtype=jnp.float32)
-C = jnp.array(data["C"], dtype=jnp.float32)
-x_circ = jnp.array(data["x_circ"], dtype=jnp.float32)
-y_circ = jnp.array(data["y_circ"], dtype=jnp.float32)
-f_data = jnp.array(data["f"], dtype=jnp.float32)
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c
 
 REC_DATA = jnp.array(data["REC_DATA"], dtype=jnp.complex64)
 
@@ -307,13 +282,8 @@ REC_DATA = REC_DATA[tx_include, :]
 
 # Extract Subset of Signals within Acceptance Angle
 numElemLeftRightExcl = 3
-<<<<<<< HEAD
 elemLeftRightExcl    = jnp.arange(-numElemLeftRightExcl,numElemLeftRightExcl + 1)
 elem_include         = jnp.ones((numElements, numElements),dtype=bool)
-=======
-elemLeftRightExcl = jnp.arange(-numElemLeftRightExcl, numElemLeftRightExcl + 1)
-elem_include = jnp.ones((numElements, numElements), dtype=bool)
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c
 
 for tx_element in range(numElements):
     elemLeftRightExclCurrent = elemLeftRightExcl + tx_element
@@ -387,11 +357,7 @@ for iter in range(Niter):
         # source estimate = (rec_sim' * rec) / (rec_sim' * rec_sim)
         num = jnp.vdot(rec_sim, rec)
         denom = jnp.vdot(rec_sim, rec_sim) + 1e-12
-<<<<<<< HEAD
         SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num/denom))
-=======
-        SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num / denom).real)
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c
     # scale the forward wavefield by the estimated source amplitudes
     WVFIELD = WVFIELD * SRC_ESTIM[None, None, :]
 
@@ -456,7 +422,6 @@ for iter in range(Niter):
         dREC_SIM = dREC_SIM.at[tx_elmt_idx, mask].set(vals)
 
     # (4) Step‐size via line search
-<<<<<<< HEAD
     REC_SIM_flat = REC_SIM2.ravel()
     dREC_flat    = dREC_SIM.ravel()
     g_flat       = gradient_img.ravel()
@@ -465,25 +430,6 @@ for iter in range(Niter):
     if stepSizeCalculation == 1:
         stepSize = jnp.real((dREC_flat @ (REC_DATA.ravel() - REC_SIM_flat))
                             / (dREC_flat @ dREC_flat))
-=======
-    REC_SIM_flat = REC_SIM2.flatten()
-    dREC_flat = dREC_SIM.flatten()
-    g_flat = gradient_img.flatten()
-    sd_flat = search_dir.flatten()
-
-    # print the norm of the dREC_flat
-    print(f"Norm of dREC_flat: {jnp.linalg.norm(dREC_flat)}")
-    # print the norm of the REC_DATA
-    print(f"Norm of REC_DATA: {jnp.linalg.norm(REC_DATA.flatten())}")
-    # print the norm of the REC_SIM_flat
-    print(f"Norm of REC_SIM_flat: {jnp.linalg.norm(REC_SIM_flat)}")
-
-    if stepSizeCalculation == 1:
-        stepSize = jnp.real(
-            (dREC_flat @ (REC_DATA.flatten() - REC_SIM_flat))
-            / (dREC_flat @ dREC_flat + 1e-12)
-        )
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c
     elif stepSizeCalculation == 2:
         stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat)
     else:  # involving search direction
@@ -530,13 +476,6 @@ for iter in range(Niter):
     plt.title("Gradient")
     plt.axis("equal")
 
-<<<<<<< HEAD
     plt.suptitle(f'Iteration {iter} (t={time.time()-t0:.2f}s)')
     plt.draw(); plt.pause(1e-3)
     plt.show()
-=======
-    plt.suptitle(f"Iteration {iter} (t={time.time() - t0:.2f}s)")
-    plt.draw()
-    plt.pause(1e-3)
-    plt.show()
->>>>>>> f0192b13012d5da0c214045eeb7465ab0d3a975c

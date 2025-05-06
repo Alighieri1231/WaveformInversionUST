@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 from functools import partial
 from scipy.io import loadmat
