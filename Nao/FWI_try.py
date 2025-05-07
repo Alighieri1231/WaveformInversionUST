@@ -10,17 +10,18 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import time
 
+#jax.config.update("jax_enable_x64", True)
 
-def stencilOptParams(vmin, vmax, f, h, g):
-    # STENCILOPTPARAMS Optimal Params for 9-Point Stencil
-    #   INPUTS:
-    #       vmin = minimum wave velocity [L/T]
-    #       vmax = maximum wave velocity [L/T]
-    #       f = frequency [1/T]
-    #       h = grid spacing in X [L]
-    #       g = (grid spacing in Y [L])/(grid spacing in X [L])
-    #   OUTPUTS:
-    #       b, d, e = optimal params according to Chen/Cheng/Feng/Wu 2013 Paper
+def stencilOptParams(vmin,vmax,f,h,g):
+#STENCILOPTPARAMS Optimal Params for 9-Point Stencil 
+#   INPUTS:
+#       vmin = minimum wave velocity [L/T]
+#       vmax = maximum wave velocity [L/T]
+#       f = frequency [1/T]
+#       h = grid spacing in X [L]
+#       g = (grid spacing in Y [L])/(grid spacing in X [L])
+#   OUTPUTS:
+#       b, d, e = optimal params according to Chen/Cheng/Feng/Wu 2013 Paper
 
     l = 100
     r = 10
@@ -255,14 +256,14 @@ def solveHelmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     return sol.reshape(Ny, Nx, -1)
 
 
-# Load data problem
-data = mat73.loadmat("RecordedData32.mat", use_attrdict=True)
-x = jnp.array(data["x"], dtype=jnp.float32)
-y = jnp.array(data["y"], dtype=jnp.float32)
-C = jnp.array(data["C"], dtype=jnp.float32)
-x_circ = jnp.array(data["x_circ"], dtype=jnp.float32)
-y_circ = jnp.array(data["y_circ"], dtype=jnp.float32)
-f_data = jnp.array(data["f"], dtype=jnp.float32)
+#Load data problem
+data = mat73.loadmat('RecordedData_test.mat')
+x      = jnp.array(data['x'],      dtype=jnp.float32)
+y        = jnp.array(data['y'],      dtype=jnp.float32)
+C        = jnp.array(data['C'],      dtype=jnp.float32)
+x_circ   = jnp.array(data['x_circ'], dtype=jnp.float32)
+y_circ   = jnp.array(data['y_circ'], dtype=jnp.float32)
+f_data   = jnp.array(data['f'],      dtype=jnp.float32)
 
 REC_DATA = jnp.array(data["REC_DATA"], dtype=jnp.complex64)
 
@@ -281,8 +282,8 @@ REC_DATA = REC_DATA[tx_include, :]
 
 # Extract Subset of Signals within Acceptance Angle
 numElemLeftRightExcl = 3
-elemLeftRightExcl = jnp.arange(-numElemLeftRightExcl, numElemLeftRightExcl + 1)
-elem_include = jnp.ones((numElements, numElements), dtype=bool)
+elemLeftRightExcl    = jnp.arange(-numElemLeftRightExcl,numElemLeftRightExcl + 1)
+elem_include         = jnp.ones((numElements, numElements),dtype=bool)
 
 for tx_element in range(numElements):
     elemLeftRightExclCurrent = elemLeftRightExcl + tx_element
@@ -311,13 +312,13 @@ Nxi = xi.size
 Nyi = yi.size
 [Xi, Yi] = jnp.meshgrid(xi, yi)
 
-xc = x_circ.ravel()  # shape (M,)
-yc = y_circ.ravel()  # shape (M,)
+xc = x_circ.ravel(order="F")  # shape (M,)
+yc = y_circ.ravel(order="F")  # shape (M,)
 
 x_idx = jnp.argmin(jnp.abs(xi[None, :] - xc[:, None]), axis=1)
 y_idx = jnp.argmin(jnp.abs(yi[None, :] - yc[:, None]), axis=1)
 
-ind = y_idx * Nxi + x_idx  # Row majo
+ind = x_idx * Nxi + y_idx  # Row majo
 
 # Solver Options for Helmholtz Equation
 a0 = 10.0  # PML Constant
@@ -346,17 +347,17 @@ for iter in range(Niter):
     print("Salio")
 
     # (1B) Estimate forward sources
-    SRC_ESTIM = jnp.zeros((tx_include.size,), dtype=jnp.float32)
+    SRC_ESTIM = jnp.zeros((tx_include.size,), dtype=jnp.complex64)
     for tx_elmt_idx in range(tx_include.size):
         # extract the single‐shot wavefield and flatten
-        wv = WVFIELD[..., tx_elmt_idx].ravel()  # length = Nyi*Nxi
+        wv = WVFIELD[..., tx_elmt_idx].ravel(order="F")  # length = Nyi*Nxi
         mask = elem_include[tx_include[tx_elmt_idx], :]  # length = numElements
         rec_sim = wv[ind[mask]]  # simulated rec for included elems
         rec = REC_DATA[tx_elmt_idx, mask]  # measured rec
         # source estimate = (rec_sim' * rec) / (rec_sim' * rec_sim)
-        num = jnp.vdot(rec_sim, rec)
-        denom = jnp.vdot(rec_sim, rec_sim) + 1e-12
-        SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num / denom).real)
+        num = jnp.vdot(rec_sim.ravel(order="F"), rec.ravel(order="F"))
+        denom = jnp.vdot(rec_sim.ravel(order="F"), rec_sim.ravel(order="F"))
+        SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num/denom))
     # scale the forward wavefield by the estimated source amplitudes
     WVFIELD = WVFIELD * SRC_ESTIM[None, None, :]
 
@@ -364,7 +365,7 @@ for iter in range(Niter):
     ADJ_SRC = jnp.zeros_like(WVFIELD)
     REC_SIM2 = jnp.zeros((tx_include.size, numElements), dtype=jnp.complex64)
     for tx_elmt_idx in range(tx_include.size):
-        wv = WVFIELD[..., tx_elmt_idx].ravel()
+        wv = WVFIELD[..., tx_elmt_idx].ravel(order="F")
         mask = elem_include[tx_include[tx_elmt_idx], :]
         vals = wv[ind[mask]]  # forward‐projected rec
         REC_SIM2 = REC_SIM2.at[tx_elmt_idx, mask].set(vals)
@@ -383,11 +384,11 @@ for iter in range(Niter):
     gradient_img = jnp.sum(BACKPROJ, axis=2)
 
     # (2A) Conjugate‐gradient momentum β
-    if iter == 1 or momentumFormula == 0:
+    if iter == 0 or momentumFormula == 0:
         beta = 0.0
     else:
         gdotg = jnp.vdot(gradient_img, gradient_img)
-        gprev2 = jnp.vdot(gradient_img_prev, gradient_img_prev) + 1e-12
+        gprev2 = jnp.vdot(gradient_img_prev, gradient_img_prev)
         if momentumFormula == 1:  # Fletcher‐Reeves
             beta = gdotg / gprev2
         elif momentumFormula == 2:  # Polak‐Ribiere
@@ -400,7 +401,7 @@ for iter in range(Niter):
             beta = jnp.clip(betaPR, 0, betaFR)
         else:  # Hestenes‐Stiefel
             diff = gradient_img - gradient_img_prev
-            beta = jnp.vdot(gradient_img, diff) / (jnp.vdot(search_dir, diff) + 1e-12)
+            beta = jnp.vdot(gradient_img, diff) / (jnp.vdot(search_dir, diff))
 
     # (2B) Update search direction
     search_dir = beta * search_dir - gradient_img
@@ -415,33 +416,24 @@ for iter in range(Niter):
     print(f"Norm of PERT_WV: {jnp.linalg.norm(PERT_WV.flatten())}")
     dREC_SIM = jnp.zeros((tx_include.size, numElements), dtype=jnp.complex64)
     for tx_elmt_idx in range(tx_include.size):
-        wv = PERT_WV[..., tx_elmt_idx].ravel()
+        wv = PERT_WV[..., tx_elmt_idx].ravel(order="F")
         mask = elem_include[tx_include[tx_elmt_idx], :]
         vals = wv[ind[mask]]
         dREC_SIM = dREC_SIM.at[tx_elmt_idx, mask].set(vals)
 
     # (4) Step‐size via line search
-    REC_SIM_flat = REC_SIM2.flatten()
-    dREC_flat = dREC_SIM.flatten()
-    g_flat = gradient_img.flatten()
-    sd_flat = search_dir.flatten()
-
-    # print the norm of the dREC_flat
-    print(f"Norm of dREC_flat: {jnp.linalg.norm(dREC_flat)}")
-    # print the norm of the REC_DATA
-    print(f"Norm of REC_DATA: {jnp.linalg.norm(REC_DATA.flatten())}")
-    # print the norm of the REC_SIM_flat
-    print(f"Norm of REC_SIM_flat: {jnp.linalg.norm(REC_SIM_flat)}")
+    REC_SIM_flat = REC_SIM2.ravel(order="F")
+    dREC_flat    = dREC_SIM.ravel(order="F")
+    g_flat       = gradient_img.ravel(order="F")
+    sd_flat      = search_dir.ravel(order="F")
 
     if stepSizeCalculation == 1:
-        stepSize = jnp.real(
-            (dREC_flat @ (REC_DATA.flatten() - REC_SIM_flat))
-            / (dREC_flat @ dREC_flat + 1e-12)
-        )
+        stepSize = jnp.real((dREC_flat @ (REC_DATA.ravel(order="F") - REC_SIM_flat))
+                            / (dREC_flat @ dREC_flat))
     elif stepSizeCalculation == 2:
-        stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat + 1e-12)
+        stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat)
     else:  # involving search direction
-        stepSize = -(g_flat @ sd_flat) / (dREC_flat @ sd_flat + 1e-12)
+        stepSize = -(g_flat @ sd_flat) / (dREC_flat @ sd_flat)
 
     print(f"Step Size: {stepSize:.4f}")
 
@@ -484,7 +476,12 @@ for iter in range(Niter):
     plt.title("Gradient")
     plt.axis("equal")
 
-    plt.suptitle(f"Iteration {iter} (t={time.time() - t0:.2f}s)")
-    plt.draw()
-    plt.pause(1e-3)
+    plt.suptitle(f'Iteration {iter} (t={time.time()-t0:.2f}s)')
+    print(f"Iteration {iter} completed in {time.time()-t0:.2f} s")
+    plt.draw(); plt.pause(1e-3)
+    # give the file a name, e.g. including the iteration number
+    filename = f"fwi_iteration_{iter:03d}.png"
+
+    # save it
+    plt.savefig(filename, format="png", dpi=300, bbox_inches="tight")
     plt.show()
