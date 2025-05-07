@@ -1,13 +1,13 @@
 import jax.numpy as jnp
-from functools import partial
-from scipy.io import loadmat
 from scipy.spatial import cKDTree
-from nonlinearcg import nonlinear_conjugate_gradient
+from nonlinearcg import (
+    nonlinear_conjugate_gradient,
+    nonlinear_conjugate_gradient_vectorized,
+)
 import matplotlib.pyplot as plt
-from HelperFunctions import imagesc
 import numpy as np
-from solve_helmholtz import solve_helmholtz
 import mat73
+import time
 
 
 def main():
@@ -82,6 +82,7 @@ def main():
         mask = elemInclude[t, :].nonzero()[0]
         explicit_indices.append(mask)
         mask_indices.append(mask)
+    mask_indices = jnp.stack([jnp.array(m, dtype=int) for m in mask_indices], axis=0)
 
     # -------------------------
     # 4) FWI
@@ -89,8 +90,29 @@ def main():
     c_init = 1480.0
     Niter = 10  # prueba rápida
 
-    #     print("Running Nonlinear Conjugate Gradient...")
-    VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
+    # t0 = time.time()
+    # #     print("Running Nonlinear Conjugate Gradient...")
+    # VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
+    #     xi,
+    #     yi,
+    #     num_elements,
+    #     REC_DATA,
+    #     SRC,
+    #     tx_include,
+    #     ind_matlab,  # ahora pasamos el índice col-major
+    #     c_init,
+    #     f,
+    #     Niter,
+    #     a0,
+    #     L_PML,
+    #     mask_indices,
+    # )
+    # t1 = time.time()
+    # print("Elapsed time: ", t1 - t0, " seconds")
+
+    t0 = time.time()
+    #     print("Running Nonlinear Conjugate Gradient (Vectorized)...")
+    VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient_vectorized(
         xi,
         yi,
         num_elements,
@@ -105,6 +127,8 @@ def main():
         L_PML,
         mask_indices,
     )
+    t1 = time.time()
+    print("Elapsed time (vectorized): ", t1 - t0, " seconds")
 
     vmin, vmax = -1e-14, 1e-14
 

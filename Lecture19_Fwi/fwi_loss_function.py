@@ -6,52 +6,100 @@ import mat73
 import matplotlib.pyplot as plt
 from solve_helmholtz import solve_helmholtz
 import time
+from jax import lax
+
+import jax
+import jax.numpy as jnp
+from functools import partial
+from solve_helmholtz import solve_helmholtz
 
 
+# your original single-shot estimator
 @jax.jit
 def estimate_src_strength(REC_SIM, REC):
     return jnp.vdot(REC_SIM.ravel(order="F"), REC.ravel(order="F")) / (
-        jnp.vdot(REC_SIM.ravel(order="F"), REC_SIM.ravel(order="F")) + 1e-12
+        jnp.vdot(REC_SIM.ravel(order="F"), REC_SIM.ravel(order="F"))
     )
+
+
+# batch it over the first axis (transmitters)
+estimate_src_strength_batched = jax.vmap(estimate_src_strength, in_axes=(0, 0))
 
 
 def fwi_loss_function(
     params,
     xi,
     yi,
-    REC_DATA,
+    REC_DATA,  # shape (Nt, num_elements)
     SRC,
     f,
     a0,
     L_PML,
     tx_include,
-    ind_matlab,
-    mask_indices,
+    ind_matlab,  # shape (num_elements,)
+    mask_indices,  # **must** be an integer array of shape (Nt, Nmask)
     num_elements,
 ):
+    # grid sizes
     Nyi, Nxi = yi.size, xi.size
+    Nt = tx_include.size
+    Nflat = Nyi * Nxi
+
+    # build slowness and velocity
     SLOW = params.reshape((Nyi, Nxi))
     VEL = 1.0 / SLOW
-    t0 = time.perf_counter()
 
+    # one-shot forward
     WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
-    print("Forward solve time:", time.perf_counter() - t0)
-    t1 = time.perf_counter()
+    # WV.shape == (Nyi, Nxi, Nt)
 
-    REC_SIM = jnp.zeros_like(REC_DATA)
-    for t in range(len(tx_include)):
-        W = WV[:, :, t].ravel(order="F")
-        mask = mask_indices[t]
-        sim = W[ind_matlab[mask]]
-        REC = REC_DATA[t, mask]
-        alpha = estimate_src_strength(sim, REC)
-        REC_SIM = REC_SIM.at[t, mask].set(alpha * sim)
+    # flatten each 2D field into a (Nflat,) vector, then stack into (Nt, Nflat)
+    flat_WV = (
+        jnp.transpose(WV, (2, 0, 1)).reshape(Nt, Nflat)  # (Nt, Nyi, Nxi)  # (Nt, Nflat)
+    )
 
-    print("Loop over transmitters time:", time.perf_counter() - t1)
-    t2 = time.perf_counter()
-    loss = 0.5 * jnp.sum(jnp.abs(REC_SIM - REC_DATA) ** 2)
-    print("Loss computation time:", time.perf_counter() - t2)
+    # --- Vectorización de la estimación de fuentes ---
+    N1, N2, Nt = WV.shape
+    Nflat = N1 * N2
 
+    # 1) Aplanamos WV en Fortran-order por tiro
+    #    Trasponemos ejes para simular ravel(order='F') con reshape
+    flat_WV = jnp.reshape(jnp.transpose(WV, (1, 0, 2)), (N1 * N2, Nt))
+
+    # 2) Construimos un array de índices globales shape (Nt, Nmask)
+    #    Aquí mask_indices ya debe ser un jnp.ndarray de enteros shape (Nt, Nmask)
+    global_inds = jnp.take(ind_matlab, mask_indices)
+
+    # 3) Extraemos simultáneamente REC_SIM y REC real (ambos shape (Nt, Nmask))
+    rec_sim = jnp.take_along_axis(flat_WV.T, global_inds, axis=1)
+    rec = jnp.take_along_axis(REC_DATA, mask_indices, axis=1)
+
+    # 4) Estimamos todas las fuentes en paralelo
+    SRC_EST = estimate_src_strength_batched(rec_sim, rec)  # shape (Nt,)
+
+    # 5) Actualizamos WV usando broadcasting
+    WV = WV * SRC_EST[None, None, :]
+
+    # 1) Flatten en Fortran-order (column-major) todas las W[:, :, t]
+    flat_WV = jnp.reshape(
+        jnp.transpose(WV, (1, 0, 2)),  # (Nxi, Nyi, Nt)
+        (Nflat, Nt),  # (Nflat, Nt)
+    )
+
+    # 2) Índices globales de receptores por tiro: shape (Nt, Nmask)
+    global_inds = jnp.take(ind_matlab, mask_indices)
+
+    # 3) Gather simultáneo de simulados y observados: (Nt, Nmask)
+    rec_sim = jnp.take_along_axis(flat_WV.T, global_inds, axis=1)
+    rec_obs = jnp.take_along_axis(REC_DATA, mask_indices, axis=1)
+
+    # 4) Construcción vectorizada de REC_SIM completo (Nt × numElements)
+    REC_SIM = jnp.zeros((Nt, num_elements), dtype=jnp.complex64)
+    batch_idx = jnp.arange(Nt)[:, None]  # (Nt,1)
+    REC_SIM = REC_SIM.at[batch_idx, mask_indices].set(rec_sim)
+
+    # final L2 loss over everything
+    loss = 0.5 * jnp.sum(jnp.abs(rec_sim - rec_obs) ** 2)
     return loss
 
 
@@ -131,6 +179,7 @@ def main():
         mask = elemInclude[t, :].nonzero()[0]
         explicit_indices.append(mask)
         mask_indices.append(mask)
+    mask_indices = jnp.stack([jnp.array(m, dtype=int) for m in mask_indices], axis=0)
 
     c_init = 1480.0
     VEL_F = run_lbfgs_fwi(

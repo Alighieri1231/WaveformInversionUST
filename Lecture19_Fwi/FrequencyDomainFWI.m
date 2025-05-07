@@ -15,9 +15,7 @@ dwnsmp = 1; % can be 1, 2, or 4 (faster with more downsampling)
             % NOTE: dwnsmp = 1 to get the results in the paper
 tx_include = 1:dwnsmp:numElements;
 REC_DATA = REC_DATA(tx_include,:); 
-disp('naomi')
-disp(num2str(norm(REC_DATA(:))))
-disp('salio')
+
 % Extract Subset of Signals within Acceptance Angle
 numElemLeftRightExcl = 31;
 elemLeftRightExcl = -numElemLeftRightExcl:numElemLeftRightExcl;
@@ -34,7 +32,7 @@ end
 %% Frequency-Domain Full Waveform Inversion (FWI)
 
 % Parameters for Conjugate Gradient Reconstruction
-Niter = 5; % Number of Iterations
+Niter = 10; % Number of Iterations
 momentumFormula = 4; % Momentum Formula for Conjugate Gradient
                      % 0 -- No Momentum (Gradient Descent)
                      % 1 -- Fletcher-Reeves (FR)
@@ -79,8 +77,6 @@ for iter = 1:Niter
     % Step 1: Calculate Gradient/Backprojection
     % (1A) Solve Forward Helmholtz Equation (H is Helmholtz matrix and u is the wavefield)
     tic; WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, SRC, f, a0, L_PML, false);
-    disp(num2str(norm(WVFIELD(:))))
-
 
     % (1B) Estimate Forward Sources and Adjust Simulated Fields Accordingly
     SRC_ESTIM = zeros(1,1,numel(tx_include));
@@ -89,20 +85,12 @@ for iter = 1:Niter
 
         REC_SIM = WVFIELD_elmt(ind(elemInclude(tx_include(tx_elmt_idx),:))); 
         REC = REC_DATA(tx_elmt_idx, elemInclude(tx_include(tx_elmt_idx),:)); 
-        % disp('REC data')
-        % disp(num2str(norm(REC_DATA(tx_elmt_idx, elemInclude(tx_include(tx_elmt_idx),:)))))
         SRC_ESTIM(tx_elmt_idx) = (REC_SIM(:)'*REC(:)) / ...
             (REC_SIM(:)'*REC_SIM(:)); % Source Estimate
 
     end
 
-
-
-    disp(num2str(norm(SRC_ESTIM(:))))
-    disp('wv')
     WVFIELD = SRC_ESTIM.*WVFIELD;
-    disp(num2str(norm(WVFIELD(:))))
-
 
     % (1C) Build Adjoint Sources - Based on Errors
     ADJ_SRC = zeros(Nyi, Nxi, numel(tx_include));
@@ -115,8 +103,6 @@ for iter = 1:Niter
         ADJ_SRC_elmt(ind(elemInclude(tx_include(tx_elmt_idx),:))) = ...
             REC_SIM(tx_elmt_idx, elemInclude(tx_include(tx_elmt_idx),:)) - ...
             REC_DATA(tx_elmt_idx, elemInclude(tx_include(tx_elmt_idx),:));
-        % disp('REC DATA 1')
-        % disp(num2str(norm(REC_DATA(tx_elmt_idx, elemInclude(tx_include(tx_elmt_idx),:)))))
         ADJ_SRC(:,:,tx_elmt_idx) = ADJ_SRC_elmt;
 
     end
@@ -125,17 +111,11 @@ for iter = 1:Niter
     VIRT_SRC = ((2*(2*pi*f).^2).*SLOW_ESTIM).*WVFIELD;
     % (1E) Backproject Error (Gradient = Backprojection)
     ADJ_WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, ADJ_SRC, f, a0, L_PML, true);
-    figure;
-    imagesc(real(ADJ_WVFIELD(:,:,1)))
-    clim([-1e-15 1e-15])
-    colormap('gray')
-    disp(num2str(norm(ADJ_WVFIELD(:))))
-    figure;
+
 
     BACKPROJ = -real(conj(VIRT_SRC).*ADJ_WVFIELD);
     gradient_img = sum(BACKPROJ,3);
-    disp('grad')
-    disp(num2str(norm(gradient_img(:))))
+
     % Step 2: Compute New Conjugate Gradient Search Direction from Gradient
     % (2A) Conjugate Gradient Momentum Calculation
     if (iter == 1) || (momentumFormula == 0)
