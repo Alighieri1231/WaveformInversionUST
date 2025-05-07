@@ -15,15 +15,6 @@ def main():
     # 1) Load recorded data
     # -------------------------
     print("Loading data...")
-    # data = loadmat("RecordedData3.mat", squeeze_me=True, struct_as_record=False)
-    # x = data["x"]
-    # y = data["y"]
-    # C = data["C"]
-    # x_circ = data["x_circ"]
-    # y_circ = data["y_circ"]
-    # f = float(data["f"])
-    # REC_DATA = data["REC_DATA"].astype(np.complex64)
-
     data = mat73.loadmat("RecordedData.mat", use_attrdict=True)
     x = jnp.array(data["x"], dtype=jnp.float32)
     y = jnp.array(data["y"], dtype=jnp.float32)
@@ -33,9 +24,6 @@ def main():
     f = jnp.array(data["f"], dtype=jnp.float32)
 
     REC_DATA = jnp.array(data["REC_DATA"], dtype=jnp.complex64)
-
-    # print norm of REC_DATA
-    print(jnp.linalg.norm(REC_DATA.flatten()))
 
     # -------------------------
     # 2) Preprocessing
@@ -100,16 +88,6 @@ def main():
     # -------------------------
     c_init = 1480.0
     Niter = 10  # prueba rápida
-    VEL = c_init * jnp.ones((Nyi, Nxi))
-    print("Initial VEL shape:", VEL.shape)
-
-    # solve Helmholtz equation
-    print("Solving Helmholtz equation...")
-    # H_cpu = solve_helmholtzcpu(xi, yi, VEL, SRC, f, a0, L_PML, False)
-
-    # H = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
-
-    # print("Solving Helmholtz equation cpu...")
 
     #     print("Running Nonlinear Conjugate Gradient...")
     VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
@@ -118,7 +96,6 @@ def main():
         num_elements,
         REC_DATA,
         SRC,
-        elemInclude,
         tx_include,
         ind_matlab,  # ahora pasamos el índice col-major
         c_init,
@@ -126,7 +103,6 @@ def main():
         Niter,
         a0,
         L_PML,
-        explicit_indices,
         mask_indices,
     )
 
