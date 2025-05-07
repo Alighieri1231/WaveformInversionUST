@@ -38,10 +38,10 @@ def stencilOptParams(vmin,vmax,f,h,g):
     theta = (m - 1) * jnp.pi / (4 * (l - 1))
 
     # G = 1./(1/Gmax + ((n-1)/(r-1))*(1/Gmin-1/Gmax));
-    G = 1.0 / (1.0 / Gmax + ((n - 1) / (r - 1)) * (1.0 / Gmin - 1.0 / Gmax))
-
+    G = 1.0 / (1.0 / Gmax + ((n[:, None] - 1) / (r - 1)) * (1.0 / Gmin - 1.0 / Gmax))
+    G = jnp.squeeze(G)
     # replicated exactly as [TH,GG]=meshgrid(theta,G)
-    TH, GG = jnp.meshgrid(theta, G, indexing="xy")
+    TH, GG = jnp.meshgrid(theta, G)
 
     # the four stencil-estimator summands
     P = jnp.cos(g * 2 * jnp.pi * jnp.cos(TH) / GG)
@@ -160,46 +160,65 @@ def solveHelmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
         [idx_c, idx_l, idx_r, idx_d, idx_u, idx_dl, idx_dr, idx_ul, idx_ur], axis=1
     ).ravel()
 
-    def gath(A, Y, X):
-        return A[Y, X]
+    # 4) Gather neighbor values from A, B, C, k
+    A_c = A[Yc, Xc]
+    A_l = A[Yl, Xl]
+    A_r = A[Yr, Xr]
+    A_d = A[Yd, Xd]
+    A_u = A[Yu, Xu]
+    B_c = B[Yc, Xc]
+    B_l = B[Yl, Xl]
+    B_r = B[Yr, Xr]
+    B_d = B[Yd, Xd]
+    B_u = B[Yu, Xu]
+    C_c = C[Yc, Xc]
+    C_l = C[Yl, Xl]
+    C_r = C[Yr, Xr]
+    C_d = C[Yd, Xd]
+    C_u = C[Yu, Xu]
+    k_c = k[Yc, Xc]
+    k_l = k[Yl, Xl]
+    k_r = k[Yr, Xr]
+    k_d = k[Yd, Xd]
+    k_u = k[Yu, Xu]
 
-    def sq(val):
-        return val**2
+    C_dl = C[Ydl, Xdl]
+    k_dl = k[Ydl, Xdl]
+    B_dl = B[Ydl, Xdl]
+    A_dl = A[Ydl, Xdl]
+    C_dr = C[Ydr, Xdr]
+    k_dr = k[Ydr, Xdr]
+    B_dr = B[Ydr, Xdr]
+    A_dr = A[Ydr, Xdr]
+    C_ul = C[Yul, Xul]
+    k_ul = k[Yul, Xul]
+    B_ul = B[Yul, Xul]
+    A_ul = A[Yul, Xul]
+    C_ur = C[Yur, Xur]
+    k_ur = k[Yur, Xur]
+    B_ur = B[Yur, Xur]
+    A_ur = A[Yur, Xur]
 
-    val_c = (1 - d - e) * gath(C, Yc, Xc) * sq(gath(k, Yc, Xc)) - b * (
-        gath(A, Yc, Xc)
-        + gath(A, Yl, Xl)
-        + gath(B, Yc, Xc) / g**2
-        + gath(B, Yd, Xd) / g**2
+    val_c = (1 - d - e) * C_c * k_c**2 - b * (
+        A_c + A_l + B_c / (g**2) + B_d / (g**2)
     ) / h**2
-    val_l = (
-        b * gath(A, Yl, Xl)
-        - ((1 - b) / 2) * (gath(B, Yl, Xl) / g**2 + gath(B, Ydl, Xdl) / g**2)
-    ) / h**2 + (d / 4) * gath(C, Yl, Xl) * sq(gath(k, Yl, Xl))
-    val_r = (
-        b * gath(A, Yc, Xc)
-        - ((1 - b) / 2) * (gath(B, Yr, Xr) / g**2 + gath(B, Ydr, Xdr) / g**2)
-    ) / h**2 + (d / 4) * gath(C, Yr, Xr) * sq(gath(k, Yr, Xr))
-    val_d = (
-        b * gath(B, Yd, Xd) / g**2
-        - ((1 - b) / 2) * (gath(A, Yd, Xd) + gath(A, Ydl, Xdl))
-    ) / h**2 + (d / 4) * gath(C, Yd, Xd) * sq(gath(k, Yd, Xd))
-    val_u = (
-        b * gath(B, Yc, Xc) / g**2
-        - ((1 - b) / 2) * (gath(A, Yu, Xu) + gath(A, Yul, Xul))
-    ) / h**2 + (d / 4) * gath(C, Yu, Xu) * sq(gath(k, Yu, Xu))
-    val_dl = ((1 - b) / 2) * (gath(A, Ydl, Xdl) + gath(B, Ydl, Xdl) / g**2) / h**2 + (
-        e / 4
-    ) * gath(C, Ydl, Xdl) * sq(gath(k, Ydl, Xdl))
-    val_dr = ((1 - b) / 2) * (gath(A, Ydr, Xdr) + gath(B, Ydr, Xdr) / g**2) / h**2 + (
-        e / 4
-    ) * gath(C, Ydr, Xdr) * sq(gath(k, Ydr, Xdr))
-    val_ul = ((1 - b) / 2) * (gath(A, Yul, Xul) + gath(B, Yul, Xul) / g**2) / h**2 + (
-        e / 4
-    ) * gath(C, Yul, Xul) * sq(gath(k, Yul, Xul))
-    val_ur = ((1 - b) / 2) * (gath(A, Yur, Xur) + gath(B, Yur, Xur) / g**2) / h**2 + (
-        e / 4
-    ) * gath(C, Yur, Xur) * sq(gath(k, Yur, Xur))
+    val_l = (b * A_l - ((1 - b) / 2) * (B_l / (g**2) + B_dl / (g**2))) / h**2 + (
+        d / 4
+    ) * C_l * k_l**2
+    val_r = (b * A_c - ((1 - b) / 2) * (B_r / (g**2) + B_dr / (g**2))) / h**2 + (
+        d / 4
+    ) * C_r * k_r**2
+    val_d = (b * B_d / (g**2) - ((1 - b) / 2) * (A_d + A_dl)) / h**2 + (
+        d / 4
+    ) * C_d * k_d**2
+    val_u = (b * B_c / (g**2) - ((1 - b) / 2) * (A_u + A_ul)) / h**2 + (
+        d / 4
+    ) * C_u * k_u**2
+    val_dl = ((1 - b) / 2) * (A_dl + B_dl / (g**2)) / h**2 + (e / 4) * C_dl * k_dl**2
+    val_dr = ((1 - b) / 2) * (A_dr + B_dr / (g**2)) / h**2 + (e / 4) * C_dr * k_dr**2
+    val_ul = ((1 - b) / 2) * (A_ul + B_ul / (g**2)) / h**2 + (e / 4) * C_ul * k_ul**2
+    val_ur = ((1 - b) / 2) * (A_ur + B_ur / (g**2)) / h**2 + (e / 4) * C_ur * k_ur**2
+
 
     vals_int = jnp.stack(
         [val_c, val_l, val_r, val_d, val_u, val_dl, val_dr, val_ul, val_ur], axis=1
@@ -270,7 +289,7 @@ REC_DATA = jnp.array(data["REC_DATA"], dtype=jnp.complex64)
 print(f"Norm of REC_DATA: {jnp.linalg.norm(REC_DATA.flatten())}")
 
 # print norm of REC_DATA
-print(jnp.linalg.norm(REC_DATA.flatten()))
+#print(jnp.linalg.norm(REC_DATA.flatten()))
 
 numElements = x_circ.size
 assert numElements == y_circ.size, "x_circ and y_circ must have the same length"
@@ -301,7 +320,7 @@ stepSizeCalculation = 1  # Which Step Size Calculation:
 # 1 -- Not Involving Gradient Nor Search Direction
 # 2 -- Involving Gradient BUT NOT Search Direction
 # 3 -- Involving Gradient AND Search Direction
-c_init = 1480  # Initial Homogeneous Sound Speed [m/s] Guess
+c_init = 1480.0  # Initial Homogeneous Sound Speed [m/s] Guess
 
 # Computational Grid (and Element Placement on Grid) for Reconstruction
 dxi = 0.8e-3
@@ -310,7 +329,7 @@ xi = jnp.arange(-xmax, xmax + dxi, dxi)
 yi = xi.copy()
 Nxi = xi.size
 Nyi = yi.size
-[Xi, Yi] = jnp.meshgrid(xi, yi)
+#[Xi, Yi] = jnp.meshgrid(xi, yi)
 
 xc = x_circ.ravel(order="F")  # shape (M,)
 yc = y_circ.ravel(order="F")  # shape (M,)
@@ -318,7 +337,9 @@ yc = y_circ.ravel(order="F")  # shape (M,)
 x_idx = jnp.argmin(jnp.abs(xi[None, :] - xc[:, None]), axis=1)
 y_idx = jnp.argmin(jnp.abs(yi[None, :] - yc[:, None]), axis=1)
 
-ind = x_idx * Nxi + y_idx  # Row majo
+ind = x_idx * Nxi + y_idx  # matlab
+print("ind_matlab shape:", ind.shape)
+print(ind)
 
 # Solver Options for Helmholtz Equation
 a0 = 10.0  # PML Constant
@@ -337,14 +358,16 @@ for tx_elmt_idx in range(tx_include.size):
 search_dir = jnp.zeros((Nyi, Nxi))  # Conjugate Gradient Direction
 gradient_img_prev = jnp.zeros((Nyi, Nxi))  # Previous Gradient Image
 VEL_ESTIM = c_init * jnp.ones((Nyi, Nxi))  # Initial Sound Speed Image [m/s]
+print("Initial VEL shape:", VEL_ESTIM.shape)
 SLOW_ESTIM = 1.0 / VEL_ESTIM  # Initial Slowness Image [s/m]
 crange = jnp.array([1400, 1600])  # For reconstruction display [m/s]
 
 for iter in range(Niter):
     # (1A) Solve forward Helmholtz
+    print(f"Start iter {iter}")
     t0 = time.time()
     WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, SRC, f_data, a0, L_PML, False)
-    print("Salio")
+    #print("Salio")
 
     # (1B) Estimate forward sources
     SRC_ESTIM = jnp.zeros((tx_include.size,), dtype=jnp.complex64)
@@ -359,59 +382,101 @@ for iter in range(Niter):
         denom = jnp.vdot(rec_sim.ravel(order="F"), rec_sim.ravel(order="F"))
         SRC_ESTIM = SRC_ESTIM.at[tx_elmt_idx].set((num/denom))
     # scale the forward wavefield by the estimated source amplitudes
-    WVFIELD = WVFIELD * SRC_ESTIM[None, None, :]
+    
+    jax.debug.print(
+            "iter={i} ||SRC_EST||={n:.3e}", i=iter, n=jnp.linalg.norm(SRC_ESTIM)
+        )
+    WVFIELD = WVFIELD * SRC_ESTIM[jnp.newaxis, jnp.newaxis, :]
+
+    jax.debug.print("iter={i} ||WV src||={n:.3e}", i=iter, n=jnp.linalg.norm(WVFIELD))
 
     # (1C) Build adjoint sources (data‐error)
-    ADJ_SRC = jnp.zeros_like(WVFIELD)
+    ADJ_SRC = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
     REC_SIM2 = jnp.zeros((tx_include.size, numElements), dtype=jnp.complex64)
     for tx_elmt_idx in range(tx_include.size):
         wv = WVFIELD[..., tx_elmt_idx].ravel(order="F")
         mask = elem_include[tx_include[tx_elmt_idx], :]
-        vals = wv[ind[mask]]  # forward‐projected rec
-        REC_SIM2 = REC_SIM2.at[tx_elmt_idx, mask].set(vals)
-        err = vals - REC_DATA[tx_elmt_idx, mask]
+        REC_SIM2 = REC_SIM2.at[tx_elmt_idx, mask].set(wv[ind[mask]])
+        err = REC_SIM2[tx_elmt_idx, mask] - REC_DATA[tx_elmt_idx, mask]
         # scatter error back into grid
         flat_adj = jnp.zeros((Nyi * Nxi,), dtype=err.dtype)
         flat_adj = flat_adj.at[ind[mask]].set(err)
         ADJ_SRC = ADJ_SRC.at[..., tx_elmt_idx].set(flat_adj.reshape((Nyi, Nxi)))
+
+    jax.debug.print(
+            "iter={i} REC shape={r} REC_SIM shape={s}",
+            i=iter,
+            r=rec.shape,
+            s=REC_SIM2.shape,
+        )
+
 
     # (1D) Virtual source
     VIRT_SRC = (2 * (2 * jnp.pi * f_data) ** 2) * SLOW_ESTIM[..., None] * WVFIELD
 
     # (1E) Backproject error → gradient
     ADJ_WVFIELD = solveHelmholtz(xi, yi, VEL_ESTIM, ADJ_SRC, f_data, a0, L_PML, True)
+    jax.debug.print("iter={i} ||adj wv||={n:.3e}", i=iter, n=jnp.linalg.norm(ADJ_WVFIELD))
+
     BACKPROJ = -jnp.real(jnp.conj(VIRT_SRC) * ADJ_WVFIELD)
     gradient_img = jnp.sum(BACKPROJ, axis=2)
+    jax.debug.print("iter={i} ||grad||={n:.3e}", i=iter, n=jnp.linalg.norm(gradient_img))
 
     # (2A) Conjugate‐gradient momentum β
     if iter == 0 or momentumFormula == 0:
         beta = 0.0
     else:
-        gdotg = jnp.vdot(gradient_img, gradient_img)
-        gprev2 = jnp.vdot(gradient_img_prev, gradient_img_prev)
+        gdotg = jnp.vdot(gradient_img.ravel(order="F"), gradient_img.ravel(order="F"))
+        gprev2 = jnp.vdot(gradient_img_prev.ravel(order="F"), gradient_img_prev.ravel(order="F"))
         if momentumFormula == 1:  # Fletcher‐Reeves
             beta = gdotg / gprev2
         elif momentumFormula == 2:  # Polak‐Ribiere
-            diff = gradient_img - gradient_img_prev
-            beta = jnp.vdot(gradient_img, diff) / gprev2
+            diff = gradient_img.ravel(order="F") - gradient_img_prev.ravel(order="F")
+            beta = jnp.vdot(gradient_img.ravel(order="F"), diff) / gprev2
         elif momentumFormula == 3:  # combined
-            diff = gradient_img - gradient_img_prev
-            betaPR = jnp.vdot(gradient_img, diff) / gprev2
+            diff = gradient_img.ravel(order="F") - gradient_img_prev.ravel(order="F")
+            betaPR = jnp.vdot(gradient_img.ravel(order="F"), diff) / gprev2
             betaFR = gdotg / gprev2
             beta = jnp.clip(betaPR, 0, betaFR)
         else:  # Hestenes‐Stiefel
-            diff = gradient_img - gradient_img_prev
-            beta = jnp.vdot(gradient_img, diff) / (jnp.vdot(search_dir, diff))
+            diff = gradient_img.ravel(order="F") - gradient_img_prev.ravel(order="F")
+            beta = jnp.vdot(gradient_img.ravel(order="F"), diff) / (jnp.vdot(search_dir.ravel(order="F"), diff))
+
+    jax.debug.print(
+            "iter={i} grad={g} sd.sum={s:.3e}",
+            i=iter,
+            g=jnp.linalg.norm(gradient_img),
+            s=jnp.linalg.norm(search_dir),
+        )
+
+    # print beta sd and grad shape
+    jax.debug.print(
+        "iter={i} beta={b:.3e} sd.shape={s} grad.shape={g}",
+        i=iter,
+        b=beta,
+        s=search_dir.shape,
+        g=gradient_img.shape,
+    )
+
+    # check if grad is zero and sd is zero
+    # jax.debug.print(jnp.linalg.norm(grad))
+    # jax.debug.print(jnp.linalg.norm(sd))
+    jax.debug.print(
+        "iter={i} grad={g} sd.sum={s:.3e}", i=iter, g=jnp.sum(gradient_img), s=jnp.sum(search_dir)
+    )
 
     # (2B) Update search direction
     search_dir = beta * search_dir - gradient_img
     gradient_img_prev = gradient_img
+    jax.debug.print(
+            "iter={i} sd_new={s:.3e}", i=iter, s=jnp.linalg.norm(search_dir.flatten())
+        )
 
     # (3) Forward project search direction
-    print(f"Norm of search_dir: {jnp.linalg.norm(search_dir.flatten())}")
+    #print(f"Norm of search_dir: {jnp.linalg.norm(search_dir.flatten())}")
     PERT_SRC = -VIRT_SRC * search_dir[:,:, None]  # search_dir[None, ..., None]
     # print norm of PERT_SRC
-    print(f"Norm of PERT_SRC: {jnp.linalg.norm(PERT_SRC.flatten())}")
+    #print(f"Norm of PERT_SRC: {jnp.linalg.norm(PERT_SRC.flatten())}")
     PERT_WV = solveHelmholtz(xi, yi, VEL_ESTIM, PERT_SRC, f_data, a0, L_PML, False)
     print(f"Norm of PERT_WV: {jnp.linalg.norm(PERT_WV.flatten())}")
     dREC_SIM = jnp.zeros((tx_include.size, numElements), dtype=jnp.complex64)
@@ -428,19 +493,24 @@ for iter in range(Niter):
     sd_flat      = search_dir.ravel(order="F")
 
     if stepSizeCalculation == 1:
-        stepSize = jnp.real((dREC_flat @ (REC_DATA.ravel(order="F") - REC_SIM_flat))
-                            / (dREC_flat @ dREC_flat))
+        stepSize = jnp.real(jnp.vdot(dREC_flat, REC_DATA.ravel(order="F") - REC_SIM_flat))/ jnp.real(jnp.vdot(dREC_flat,dREC_flat))
     elif stepSizeCalculation == 2:
         stepSize = (g_flat @ g_flat) / (dREC_flat @ dREC_flat)
     else:  # involving search direction
         stepSize = -(g_flat @ sd_flat) / (dREC_flat @ sd_flat)
 
-    print(f"Step Size: {stepSize:.4f}")
+    #print(f"Step Size: {stepSize:.4f}")
 
     # update slowness & velocity
     SLOW_ESTIM = SLOW_ESTIM + stepSize * search_dir
-    VEL_ESTIM = 1.0 / jnp.real(SLOW_ESTIM)
-
+    VEL_ESTIM = 1.0 / SLOW_ESTIM
+    jax.debug.print(
+            "iter={i} Vmin/Vmax={vmin:.3e}/{vmax:.3e}",
+            i=iter,
+            vmin=jnp.min(VEL_ESTIM),
+            vmax=jnp.max(VEL_ESTIM),
+        )
+    
     # visualize (2×2)
     plt.subplot(2, 2, 1)
     plt.imshow(
