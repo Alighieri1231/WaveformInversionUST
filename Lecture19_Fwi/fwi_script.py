@@ -24,7 +24,7 @@ def main():
     # f = float(data["f"])
     # REC_DATA = data["REC_DATA"].astype(np.complex64)
 
-    data = mat73.loadmat("RecordedData3.mat", use_attrdict=True)
+    data = mat73.loadmat("RecordedData.mat", use_attrdict=True)
     x = jnp.array(data["x"], dtype=jnp.float32)
     y = jnp.array(data["y"], dtype=jnp.float32)
     C = jnp.array(data["C"], dtype=jnp.float32)
@@ -48,7 +48,7 @@ def main():
     REC_DATA = REC_DATA[tx_include, :]
 
     # build mask elemInclude
-    numElemLR = 3
+    numElemLR = 31
     arangeLR = jnp.arange(-numElemLR, numElemLR + 1)
     elemInclude = jnp.ones((num_elements, num_elements), dtype=bool)
     for tx in range(num_elements):
@@ -71,8 +71,6 @@ def main():
     # ind_matlab = x_idx * Nyi + y_idx
     ind_matlab = y_idx * Nyi + x_idx
 
-    print("ind_matlab shape:", ind_matlab.shape)
-    print(ind_matlab)
     xc = x_circ.ravel()  # shape (M,)
     yc = y_circ.ravel()  # shape (M,)
 
@@ -80,14 +78,6 @@ def main():
     y_idx = jnp.argmin(jnp.abs(yi[None, :] - yc[:, None]), axis=1)
 
     ind_matlab = x_idx * Nxi + y_idx  # Row majo
-
-    print("ind_matlab shape:", ind_matlab.shape)
-    print(ind_matlab)
-
-    # save ind_matlab as mat file
-    from scipy.io import savemat
-
-    savemat("ind_matlab2.mat", {"ind_matlab2": ind_matlab})
 
     # ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
@@ -109,56 +99,19 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 5  # prueba rápida
+    Niter = 10  # prueba rápida
     VEL = c_init * jnp.ones((Nyi, Nxi))
     print("Initial VEL shape:", VEL.shape)
 
-    # for t in range(len(tx_include)):
-    #     mask = mask_indices[t]  # array de 193 índices 0-based
-    #     REC= REC_DATA[t, mask]  # == REC(:)
-    #     break
-    # #export elemInclude as mat logical file
-    # from scipy.io import savemat
-    # savemat("REC.mat", {"REC1": REC})
+    # solve Helmholtz equation
+    print("Solving Helmholtz equation...")
+    # H_cpu = solve_helmholtzcpu(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-    # WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
+    # H = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-    # print("WV shape:", WV.shape)
+    # print("Solving Helmholtz equation cpu...")
 
-    # vmin, vmax = -1e-14, 1e-14
-
-    # # show first wavefield
-    # plt.imshow(
-    #     jnp.abs(WV[:, :, 0]),
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     cmap="gray",
-    #     origin="upper",
-    # )
-    # plt.title("Wavefield")
-    # plt.show()
-
-    # plt.imshow(
-    #     jnp.real(WV[:, :, 0]),
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     cmap="gray",
-    #     origin="upper",
-    #     vmin=vmin,
-    #     vmax=vmax,
-    # )
-    # plt.title("Wavefield")
-    # plt.show()
-    # plt.imshow(
-    #     jnp.imag(WV[:, :, 0]),
-    #     extent=[xi.min(), xi.max(), yi.max(), yi.min()],
-    #     cmap="gray",
-    #     origin="upper",
-    #     vmin=vmin,
-    #     vmax=vmax,
-    # )
-    # plt.title("Wavefield")
-    # plt.show()
-
-    print("Running Nonlinear Conjugate Gradient...")
+    #     print("Running Nonlinear Conjugate Gradient...")
     VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
         xi,
         yi,
@@ -176,6 +129,7 @@ def main():
         explicit_indices,
         mask_indices,
     )
+
     vmin, vmax = -1e-14, 1e-14
 
     plt.figure(figsize=(12, 10))

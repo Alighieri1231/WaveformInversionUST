@@ -2,16 +2,29 @@ import jax.numpy as jnp
 from jax.scipy.linalg import solve
 from jax import jit
 import jax
+import numpy as np
 
 from jax.experimental.sparse.linalg import spsolve
 
-# from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve as spsolve_cpu
+from scipy.sparse import csc_matrix
+from scipy.sparse import csr_matrix
 from jax.experimental import sparse as jsparse
 
 # time analysis with tic toc
 import time
 
+from jax.experimental import host_callback
 
+
+def scipy_solve(data, indices, indptr, rhs_np, shape):
+    NxNy = shape[0]
+    mat = csr_matrix((data, indices, indptr), shape=(NxNy, NxNy))
+    return spsolve_cpu(mat, rhs_np)
+
+
+# @jit
+# @partial(jax.jit, static_argnames=["assemble_Helmholtz"])
 @jit
 def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     sign_convention = -1
@@ -57,29 +70,12 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
     # show
 
     H_bcoo = assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k)
-    # print("Assembled Helmholtz matrix.")
-    # print("H_bcoo", H_bcoo.shape)
-    # 1) Elige la matriz correcta: H o H^*
-    # if adjoint:
-    #     H_t = H_bcoo.transpose()  # sigue siendo BCOO
-    #     H_use = jsparse.BCOO((jnp.conj(H_t.data), H_t.indices), shape=H_t.shape)
-    #     # H_bcoo = H_bcoo.transpose()
-    #     # H_bcoo = H_bcoo.conjugate()
-    # else:
-    #     H_use = H_bcoo
-    #     import jax.lax as lax
 
     H_use = jax.lax.cond(
         adjoint,
         lambda H: jsparse.BCOO(
             (jnp.conj(H.transpose().data), H.transpose().indices), shape=H.shape
         ),
-        # lambda H: jsparse.BCOO(
-        #     (H.transpose().data, H.transpose().indices), shape=H.shape
-        # ),
-        # lambda H: jsparse.BCOO(
-        #     (H.transpose().data, H.transpose().indices), shape=H.shape
-        # ),
         lambda H: H,
         H_bcoo,
     )
@@ -89,27 +85,30 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
 
     # reshape src to Nx*Ny and -1 to get the right shape
     rhs = jnp.reshape(src, (Nx * Ny, -1))
-    # print("rhs shape", rhs.shape)
-    # Change type to complex64
     rhs = jnp.array(rhs, dtype=jnp.complex64)
 
     data, indices, indptr = H_use.data, H_use.indices, H_use.indptr
-    # print(H_use.indices)
-    # print("non empty values", H_use.data[H_use.data != 0].sum())
-    # print("Solving system...")
-    # sol = spsolve(data, indices, indptr, rhs)
-    # tic toc for time analysis
 
-    # start = time.time()
+    start = time.time()
 
-    sol = jnp.stack(
-        [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
+    # sol = jnp.stack(
+    #     [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
+    # )
+    sol = jax.pure_callback(
+        scipy_solve,
+        jax.ShapeDtypeStruct((Nx * Ny, rhs.shape[1]), dtype=jnp.complex64),
+        data,
+        indices,
+        indptr,
+        rhs,
+        (Nx * Ny, Nx * Ny),
     )
+    # sol = spsolve(data, indices, indptr, rhs)
     # sol = spsolve(data, indices, indptr, rhs)
     # A = csc_matrix((data, indices, indptr), shape=(Nx * Ny, Nx * Ny))
     # sol = spsolve(H_use, rhs)
-    # end = time.time()
-    # print("Time taken to solve system:", end - start)
+    end = time.time()
+    print("Time taken to solve system:", end - start)
 
     return sol.reshape(Ny, Nx, -1)
 
@@ -299,10 +298,6 @@ def assemble_Helmholtz(Nx, Ny, g, b, d, e, h, A, B, C, k):
 
     # 8) Assemble sparse COO
     H = jsparse.BCOO((vals, jnp.stack([rows, cols], axis=1)), shape=(Nx * Ny, Nx * Ny))
-    # H = csr_matrix((vals, (rows, cols)), shape=(Nx * Ny, Nx * Ny))
-    # H = csr_matrix(
-    #     (np.array(vals), (np.array(rows), np.array(cols))), shape=(Nx * Ny, Nx * Ny)
-    # )
 
     return H
 
