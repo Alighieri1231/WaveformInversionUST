@@ -82,9 +82,6 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
 
     start = time.time()
 
-    # sol = jnp.stack(
-    #     [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
-    # )
     sol = jax.pure_callback(
         scipy_solve,
         jax.ShapeDtypeStruct((Nx * Ny, rhs.shape[1]), dtype=jnp.complex64),
@@ -94,6 +91,9 @@ def solve_helmholtz(x, y, vel, src, f, a0, L_PML, adjoint):
         rhs,
         (Nx * Ny, Nx * Ny),
     )
+    # sol = jnp.stack(
+    #     [spsolve(data, indices, indptr, rhs[:, i]) for i in range(rhs.shape[1])], axis=1
+    # )
 
     end = time.time()
     print("Time taken to solve system:", end - start)

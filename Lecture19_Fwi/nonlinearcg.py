@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from solve_helmholtz import solve_helmholtz
 from jax import vmap
+import time
 
 
 @jit
@@ -16,7 +17,9 @@ def estimate_src_strength(REC_SIM, REC):
         jnp.vdot(REC_SIM.ravel(order="F"), REC_SIM.ravel(order="F"))
     )
 
+estimate_src_strength_batched = vmap(estimate_src_strength, in_axes=(0, 0))
 
+@jit
 def compute_step_size(dREC, REC_DATA, REC_SIM, SLOW, sd_new):
     num = jnp.real(
         jnp.vdot(dREC.ravel(order="F"), (REC_DATA - REC_SIM).ravel(order="F"))
@@ -29,7 +32,6 @@ def compute_step_size(dREC, REC_DATA, REC_SIM, SLOW, sd_new):
     return VEL_new, SLOW_new
 
 
-estimate_src_strength_batched = vmap(estimate_src_strength, in_axes=(0, 0))
 
 # -----------------------------------------------------------------------------
 # 1) Nonlinear Conjugate Gradient (FWI) with correct Fortran‐ordering indexing
@@ -52,7 +54,7 @@ def nonlinear_conjugate_gradient(
     mask_indices,
 ):
     Nyi, Nxi = yi.size, xi.size
-
+    t5 = time.time()
     # Initialize state
     VEL = c_init * jnp.ones((Nyi, Nxi))
     SLOW = 1.0 / VEL
@@ -60,9 +62,15 @@ def nonlinear_conjugate_gradient(
     gprev = jnp.zeros((Nyi, Nxi))
     ADJ_WV = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
     WV = jnp.zeros((Nyi, Nxi, len(tx_include)), dtype=jnp.complex64)
+    t6 = time.time() - t5
+    jax.debug.print(
+        "Initialization time: {t:.2f} seconds",
+        t=t6,
+    )
 
     def body_fun(state, it):
         VEL, SLOW, sd, gprev, ADJ_WV, WV = state
+        t3 = time.time()
 
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
@@ -150,10 +158,24 @@ def nonlinear_conjugate_gradient(
         # step = compute_step_size(dREC, REC_DATA, REC_SIM)
         VEL_new, SLOW_new = compute_step_size(dREC, REC_DATA, REC_SIM, SLOW, sd_new)
 
+        t4 = time.time() - t3
+
+        jax.debug.print(
+            "Iteration {it}: {t:.2f} seconds",
+            it=it,
+            t=t4,
+        )
+
         return (VEL_new, SLOW_new, sd_new, grad, ADJ_WV, WV), None
 
+    t7 = time.time()
     (VEL_F, _, sd_F, grad_F, ADJ_WV, WV), _ = jax.lax.scan(
         body_fun, (VEL, SLOW, sd, gprev, ADJ_WV, WV), jnp.arange(Niter)
+    )
+    t8 = time.time() - t7
+    jax.debug.print(
+        "Compile: {t:.2f} seconds",
+        t=t8,
     )
     return VEL_F, sd_F, grad_F, ADJ_WV, WV
 
@@ -190,26 +212,18 @@ def nonlinear_conjugate_gradient_vectorized(
         # 1a) forward Helmholtz
         WV = solve_helmholtz(xi, yi, VEL, SRC, f, a0, L_PML, False)
 
-        # --- Vectorización de la estimación de fuentes ---
+        # --- Vectorization ---
         N1, N2, Nt = WV.shape
         Nflat = N1 * N2
 
-        # 1) Aplanamos WV en Fortran-order por tiro
-        #    Trasponemos ejes para simular ravel(order='F') con reshape
+        # 1b) estimate source strengths
         flat_WV = jnp.reshape(jnp.transpose(WV, (1, 0, 2)), (N1 * N2, Nt))
-
-        # 2) Construimos un array de índices globales shape (Nt, Nmask)
-        #    Aquí mask_indices ya debe ser un jnp.ndarray de enteros shape (Nt, Nmask)
         global_inds = jnp.take(ind_matlab, mask_indices)
-
-        # 3) Extraemos simultáneamente REC_SIM y REC real (ambos shape (Nt, Nmask))
         rec_sim = jnp.take_along_axis(flat_WV.T, global_inds, axis=1)
         rec = jnp.take_along_axis(REC_DATA, mask_indices, axis=1)
-
-        # 4) Estimamos todas las fuentes en paralelo
         SRC_EST = estimate_src_strength_batched(rec_sim, rec)  # shape (Nt,)
 
-        # 5) Actualizamos WV usando broadcasting
+        # 5) Update WV with the estimated source strengths
         WV = WV * SRC_EST[None, None, :]
 
         # 1) Flatten en Fortran-order (column-major) todas las W[:, :, t]

@@ -57,7 +57,7 @@ def main():
 
     # MATLAB‐style linear index (column‐major, zero‐based)
     # ind_matlab = x_idx * Nyi + y_idx
-    ind_matlab = y_idx * Nyi + x_idx
+    # ind_matlab = y_idx * Nyi + x_idx
 
     xc = x_circ.ravel()  # shape (M,)
     yc = y_circ.ravel()  # shape (M,)
@@ -66,7 +66,7 @@ def main():
     y_idx = jnp.argmin(jnp.abs(yi[None, :] - yc[:, None]), axis=1)
 
     ind_matlab = x_idx * Nxi + y_idx  # Row majo
-
+    # ind_matlab = y_idx * Nyi + x_idx
     # ind_matlab = np.ravel_multi_index((y_idx, x_idx), dims=(Nyi, Nxi), order="c")
     # build source array (one hot per tx)
     SRC = jnp.zeros((Nyi, Nxi, tx_include.size), dtype=jnp.complex64)
@@ -88,7 +88,7 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 10  # prueba rápida
+    Niter = 1  # prueba rápida
 
     # t0 = time.time()
     # #     print("Running Nonlinear Conjugate Gradient...")
@@ -112,7 +112,7 @@ def main():
 
     t0 = time.time()
     #     print("Running Nonlinear Conjugate Gradient (Vectorized)...")
-    VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient_vectorized(
+    VEL_F, SD_F, GRAD_F, ADJ_WV, WV = nonlinear_conjugate_gradient(
         xi,
         yi,
         num_elements,
@@ -130,7 +130,7 @@ def main():
     t1 = time.time()
     print("Elapsed time (vectorized): ", t1 - t0, " seconds")
 
-    vmin, vmax = -1e-14, 1e-14
+    vmin, vmax = -1e-17, 1e-15
 
     plt.figure(figsize=(12, 10))
 
@@ -164,6 +164,8 @@ def main():
         extent=[xi.min(), xi.max(), yi.max(), yi.min()],
         cmap="gray",
         origin="upper",
+        vmin=vmin,
+        vmax=vmax,
     )
     ax3.set_title("Forward Wavefield (real)")
     ax4 = plt.subplot(2, 2, 4)
@@ -172,6 +174,8 @@ def main():
         extent=[xi.min(), xi.max(), yi.max(), yi.min()],
         cmap="gray",
         origin="upper",
+        vmin=vmin,
+        vmax=vmax,
     )
     ax4.set_title("Forward Wavefield (imag)")
 
