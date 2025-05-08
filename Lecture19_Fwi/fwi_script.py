@@ -88,7 +88,7 @@ def main():
     # 4) FWI
     # -------------------------
     c_init = 1480.0
-    Niter = 1  # prueba rápida
+    Niter = 1  # change this to 1 to test
 
     # t0 = time.time()
     # #     print("Running Nonlinear Conjugate Gradient...")
@@ -119,7 +119,7 @@ def main():
         REC_DATA,
         SRC,
         tx_include,
-        ind_matlab,  # ahora pasamos el índice col-major
+        ind_matlab,
         c_init,
         f,
         Niter,
